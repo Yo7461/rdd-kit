@@ -1,0 +1,12 @@
+[
+  {
+    "rule": "FILE-1",
+    "severity": "warning",
+    "anchor": {
+      "kind": "file",
+      "file": "roadmap/notes.txt"
+    },
+    "message": "Unexpected file outside the conventional layout (not one of the 8 known file types, .gitkeep, or roadmap/assets/).",
+    "suggestion": "Move it into the directory layout in schemas.md — reproduction assets for an R/E go under `roadmap/assets/<ID>/`. Add it to `allowNames` or `allowPaths` in the config if the location is intentional."
+  }
+]

@@ -1,0 +1,44 @@
+[
+  {
+    "rule": "TXT-2",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/research/R0002-followup.md",
+      "range": {
+        "start": { "line": 0, "character": 0 },
+        "end": { "line": 8, "character": 3 }
+      }
+    },
+    "message": "Cannot parse front matter as YAML (Flow sequence in block collection must be sufficiently indented and end with a ] at line 4, column 1).",
+    "suggestion": "Fix the YAML syntax — brackets, quotes, and indentation."
+  },
+  {
+    "rule": "TXT-2",
+    "severity": "warning",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/research/R0002-followup.md",
+      "range": {
+        "start": { "line": 23, "character": 0 },
+        "end": { "line": 23, "character": 14 }
+      }
+    },
+    "message": "Inconsistent table column count (header has 2, this row has 3).",
+    "suggestion": "Change the row to match the header — escape a `|` inside a cell as `\\|` or wrap it in inline code."
+  },
+  {
+    "rule": "TXT-2",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/spec/sample.md",
+      "range": {
+        "start": { "line": 28, "character": 0 },
+        "end": { "line": 28, "character": 7 }
+      }
+    },
+    "message": "Missing the closing code fence.",
+    "suggestion": "Add the matching closing fence (``` or ~~~)."
+  }
+]

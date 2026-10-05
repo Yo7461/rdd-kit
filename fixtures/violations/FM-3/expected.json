@@ -1,0 +1,16 @@
+[
+  {
+    "rule": "FM-3",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/status.md",
+      "range": {
+        "start": { "line": 2, "character": 0 },
+        "end": { "line": 2, "character": 19 }
+      }
+    },
+    "message": "`open_session` points to S0001, but that session has `state: closed`.",
+    "suggestion": "Update `open_session`, or reconcile that session with the recovery procedure in workflows.md."
+  }
+]

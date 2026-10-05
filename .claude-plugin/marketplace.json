@@ -1,0 +1,14 @@
+{
+  "name": "rdd-kit",
+  "description": "The marketplace for rdd-kit, a kit for roadmap-driven development with Claude Code (a single plugin).",
+  "owner": {
+    "name": "Yo7461"
+  },
+  "plugins": [
+    {
+      "name": "rdd-kit",
+      "source": "./plugin",
+      "description": "The /roadmap skill for roadmap-driven development, plus roadmap-lint — a CLI linter that makes its records tool-verifiable."
+    }
+  ]
+}

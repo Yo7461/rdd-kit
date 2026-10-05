@@ -1,0 +1,30 @@
+[
+  {
+    "rule": "BID-3",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/phases/P0001-first/status.md",
+      "range": {
+        "start": { "line": 19, "character": 0 },
+        "end": { "line": 19, "character": 47 }
+      }
+    },
+    "message": "Session Log row for S0002, whose session file is in another phase (roadmap/phases/P0002-second/sessions/S0002.md).",
+    "suggestion": "Move the row to that phase's status.md, or fix the session ID in this row."
+  },
+  {
+    "rule": "BID-3",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/phases/P0002-second/status.md",
+      "range": {
+        "start": { "line": 14, "character": 0 },
+        "end": { "line": 14, "character": 14 }
+      }
+    },
+    "message": "Missing Session Log row for the closed session S0002 (roadmap/phases/P0002-second/sessions/S0002.md).",
+    "suggestion": "Append the one-line row for S0002 — if a merge or a hand edit dropped it, rebuild it from that session file's front matter."
+  }
+]

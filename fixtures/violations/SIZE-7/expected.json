@@ -1,0 +1,16 @@
+[
+  {
+    "rule": "SIZE-7",
+    "severity": "warning",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/roadmap.md",
+      "range": {
+        "start": { "line": 200, "character": 0 },
+        "end": { "line": 200, "character": 6 }
+      }
+    },
+    "message": "roadmap.md has too many lines (201). Maximum allowed is 200.",
+    "suggestion": "Fold the done phases into a heading and a one-line goal to fit within 200 lines."
+  }
+]

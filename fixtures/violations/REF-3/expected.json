@@ -1,0 +1,16 @@
+[
+  {
+    "rule": "REF-3",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/research/R0002-followup.md",
+      "range": {
+        "start": { "line": 17, "character": 11 },
+        "end": { "line": 17, "character": 28 }
+      }
+    },
+    "message": "Unexpected reference to a volatile location in a `done` file: `scratchpad/gen.py`.",
+    "suggestion": "Move the asset to `roadmap/assets/<ID>/` under version control and update the reference (ground rule 8)."
+  }
+]

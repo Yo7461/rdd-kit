@@ -1,0 +1,16 @@
+[
+  {
+    "rule": "FM-1",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/status.md",
+      "range": {
+        "start": { "line": 0, "character": 0 },
+        "end": { "line": 5, "character": 3 }
+      }
+    },
+    "message": "Missing required front matter key `updated` in the root status.md.",
+    "suggestion": "Add `updated` as shown in the schemas.md template."
+  }
+]

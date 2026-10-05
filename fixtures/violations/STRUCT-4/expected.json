@@ -1,0 +1,30 @@
+[
+  {
+    "rule": "STRUCT-4",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/spec/map.md",
+      "range": {
+        "start": { "line": 10, "character": 0 },
+        "end": { "line": 10, "character": 66 }
+      }
+    },
+    "message": "C0004 (an Invariants line) has no `verified_by`.",
+    "suggestion": "Name the test that holds the contract up in `verified_by` (`path::name`, several allowed), or write `manual` when no test can cover it — either way the strength of the contract stays visible."
+  },
+  {
+    "rule": "STRUCT-4",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/spec/sample.md",
+      "range": {
+        "start": { "line": 7, "character": 0 },
+        "end": { "line": 7, "character": 20 }
+      }
+    },
+    "message": "C0001 has no `verified_by`.",
+    "suggestion": "Name the test that holds the contract up in `verified_by` (`path::name`, several allowed), or write `manual` when no test can cover it — either way the strength of the contract stays visible."
+  }
+]

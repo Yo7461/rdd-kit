@@ -1,0 +1,105 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the two reporters > json: version, summary, and 0-based ranges (golden) 1`] = `
+"{
+  "version": 1,
+  "diagnostics": [
+    {
+      "rule": "ZZZ-9",
+      "severity": "warning",
+      "anchor": {
+        "kind": "repo"
+      },
+      "message": "A repository-wide warning.",
+      "suggestion": "Fix Z."
+    },
+    {
+      "rule": "DDD-4",
+      "severity": "error",
+      "anchor": {
+        "kind": "range",
+        "file": "roadmap/roadmap.md",
+        "range": {
+          "start": {
+            "line": 2,
+            "character": 4
+          },
+          "end": {
+            "line": 2,
+            "character": 8
+          }
+        }
+      },
+      "message": "An error in another file.",
+      "suggestion": "Fix D."
+    },
+    {
+      "rule": "CCC-3",
+      "severity": "warning",
+      "anchor": {
+        "kind": "file",
+        "file": "roadmap/status.md"
+      },
+      "message": "A whole-file warning.",
+      "suggestion": "Fix C."
+    },
+    {
+      "rule": "AAA-1",
+      "severity": "error",
+      "anchor": {
+        "kind": "range",
+        "file": "roadmap/status.md",
+        "range": {
+          "start": {
+            "line": 60,
+            "character": 0
+          },
+          "end": {
+            "line": 60,
+            "character": 10
+          }
+        }
+      },
+      "message": "Rule A at the same position.",
+      "suggestion": "Fix A."
+    },
+    {
+      "rule": "BBB-2",
+      "severity": "error",
+      "anchor": {
+        "kind": "range",
+        "file": "roadmap/status.md",
+        "range": {
+          "start": {
+            "line": 60,
+            "character": 0
+          },
+          "end": {
+            "line": 60,
+            "character": 10
+          }
+        }
+      },
+      "message": "Rule B at the same position.",
+      "suggestion": "Fix B."
+    }
+  ],
+  "summary": {
+    "errors": 3,
+    "warnings": 2,
+    "filesChecked": 7
+  },
+  "notices": []
+}
+"
+`;
+
+exports[`the two reporters > text: 1-based positions plus the summary line (golden) 1`] = `
+"(repo) warning ZZZ-9 A repository-wide warning. [Fix: Fix Z.]
+roadmap/roadmap.md:3:5 error DDD-4 An error in another file. [Fix: Fix D.]
+roadmap/status.md warning CCC-3 A whole-file warning. [Fix: Fix C.]
+roadmap/status.md:61:1 error AAA-1 Rule A at the same position. [Fix: Fix A.]
+roadmap/status.md:61:1 error BBB-2 Rule B at the same position. [Fix: Fix B.]
+5 problems (3 errors, 2 warnings) in 7 files.
+"
+`;

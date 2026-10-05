@@ -1,0 +1,16 @@
+[
+  {
+    "rule": "SIZE-5",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/phases/P0001-first/status.md",
+      "range": {
+        "start": { "line": 19, "character": 0 },
+        "end": { "line": 19, "character": 43 }
+      }
+    },
+    "message": "Duplicate Session Log rows for session S0001 (2 rows). Session Log holds one line per session.",
+    "suggestion": "Move the detail into that session log and keep one line here."
+  }
+]

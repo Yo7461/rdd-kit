@@ -1,0 +1,16 @@
+[
+  {
+    "rule": "STRUCT-2",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/phases/P0001-first/status.md",
+      "range": {
+        "start": { "line": 26, "character": 0 },
+        "end": { "line": 26, "character": 12 }
+      }
+    },
+    "message": "Duplicate fixed heading `## Decisions` (2 occurrences).",
+    "suggestion": "Move the content into a single section. Duplicated headings leave it ambiguous which one is authoritative."
+  }
+]

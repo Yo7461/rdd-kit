@@ -1,0 +1,12 @@
+[
+  {
+    "rule": "STRUCT-1",
+    "severity": "error",
+    "anchor": {
+      "kind": "file",
+      "file": "roadmap/phases/P0001-first/sessions/S0001.md"
+    },
+    "message": "Missing required heading `## Handoff` in a session log.",
+    "suggestion": "Add the fixed heading from the schemas.md template."
+  }
+]

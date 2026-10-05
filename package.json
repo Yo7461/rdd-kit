@@ -1,0 +1,25 @@
+{
+  "name": "rdd-kit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.4.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -b packages/cli",
+    "typecheck": "tsc -b packages/cli && tsc -p tsconfig.tests.json",
+    "test": "pnpm run typecheck && vitest run",
+    "lint:corpus": "pnpm run build && node packages/cli/dist/main.js fixtures/valid --config lint-corpus.config.json",
+    "regen:fixtures": "pnpm run build && node scripts/regen-fixtures.mjs",
+    "build:plugin": "node scripts/build-plugin.mjs",
+    "sync:version": "node scripts/sync-version.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "esbuild": "^0.28.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}

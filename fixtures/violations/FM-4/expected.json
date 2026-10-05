@@ -1,0 +1,16 @@
+[
+  {
+    "rule": "FM-4",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/phases/P0001-first/status.md",
+      "range": {
+        "start": { "line": 2, "character": 0 },
+        "end": { "line": 2, "character": 11 }
+      }
+    },
+    "message": "Missing `closed` (the completion date) while `state` is `done`.",
+    "suggestion": "Add `closed: YYYY-MM-DD` to the front matter."
+  }
+]

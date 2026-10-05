@@ -1,0 +1,16 @@
+[
+  {
+    "rule": "FM-2",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/phases/P0001-first/sessions/S0001.md",
+      "range": {
+        "start": { "line": 4, "character": 0 },
+        "end": { "line": 4, "character": 13 }
+      }
+    },
+    "message": "Unexpected value `\"opened\"` for front matter key `state`. Allowed: open | closed.",
+    "suggestion": "Change the value to one of the allowed values."
+  }
+]

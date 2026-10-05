@@ -1,0 +1,12 @@
+[
+  {
+    "rule": "ID-1",
+    "severity": "error",
+    "anchor": {
+      "kind": "file",
+      "file": "roadmap/research/R0001-sample.md"
+    },
+    "message": "Duplicate definition of R0001 (first defined at roadmap/research/R0001-duplicate.md).",
+    "suggestion": "Move the later definition to the next free number instead of renumbering IDs. The session records show which one came later."
+  }
+]

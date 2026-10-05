@@ -1,0 +1,16 @@
+[
+  {
+    "rule": "BID-2",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/research/R0002-followup.md",
+      "range": {
+        "start": { "line": 3, "character": 0 },
+        "end": { "line": 3, "character": 14 }
+      }
+    },
+    "message": "Missing R0002 in the `artifacts` of S0001 (pointed to by `created / completed`).",
+    "suggestion": "First check `created / completed` in R0002 for a typo. If S0001 really needs the entry, record why in the Did of the next session and fix it there."
+  }
+]

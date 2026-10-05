@@ -1,0 +1,16 @@
+[
+  {
+    "rule": "STRUCT-3",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/status.md",
+      "range": {
+        "start": { "line": 4, "character": 0 },
+        "end": { "line": 4, "character": 45 }
+      }
+    },
+    "message": "Inconsistent `next_command` and the recommended-command line in the Next section (compared after removing backticks).",
+    "suggestion": "Record the full text after `Recommended: ` in `next_command`, as the skill requires."
+  }
+]

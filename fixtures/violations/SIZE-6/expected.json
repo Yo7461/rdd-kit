@@ -1,0 +1,16 @@
+[
+  {
+    "rule": "SIZE-6",
+    "severity": "warning",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/phases/P0001-first/status.md",
+      "range": {
+        "start": { "line": 300, "character": 0 },
+        "end": { "line": 300, "character": 4 }
+      }
+    },
+    "message": "The phase status.md has too many lines (301). Maximum allowed is 300.",
+    "suggestion": "Run `/roadmap replan` to split the phase — the phase has grown too large."
+  }
+]

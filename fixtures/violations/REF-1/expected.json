@@ -1,0 +1,16 @@
+[
+  {
+    "rule": "REF-1",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/status.md",
+      "range": {
+        "start": { "line": 58, "character": 2 },
+        "end": { "line": 58, "character": 7 }
+      }
+    },
+    "message": "Cannot find a definition for B0009. Not in the Blockers table — a reference to a resolved blocker is normal only in the Fact layer (phases/, research/, experiments/).",
+    "suggestion": "Change the reference to a definition that still exists, or move the note into the Fact layer (a session log, for example) if it describes past history."
+  }
+]

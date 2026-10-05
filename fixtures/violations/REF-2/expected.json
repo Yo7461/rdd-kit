@@ -1,0 +1,16 @@
+[
+  {
+    "rule": "REF-2",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/spec/sample.md",
+      "range": {
+        "start": { "line": 11, "character": 0 },
+        "end": { "line": 11, "character": 22 }
+      }
+    },
+    "message": "Cannot find the referenced path `src/missing.ts` (C0001 `source` — relative to the repository root).",
+    "suggestion": "Fix the path, or put the referenced file in place."
+  }
+]

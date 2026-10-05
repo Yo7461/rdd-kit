@@ -1,0 +1,44 @@
+[
+  {
+    "rule": "TXT-3",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/research/R0001-sample.md",
+      "range": {
+        "start": { "line": 25, "character": 0 },
+        "end": { "line": 25, "character": 7 }
+      }
+    },
+    "message": "Merge conflict marker `<<<<<<<` left in the file.",
+    "suggestion": "Finish the conflict resolution — keep the intended text and delete the marker lines. If a `=======` line is an intentional underline, use an ATX heading (`#`) instead."
+  },
+  {
+    "rule": "TXT-3",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/research/R0001-sample.md",
+      "range": {
+        "start": { "line": 27, "character": 0 },
+        "end": { "line": 27, "character": 7 }
+      }
+    },
+    "message": "Merge conflict marker `=======` left in the file.",
+    "suggestion": "Finish the conflict resolution — keep the intended text and delete the marker lines. If a `=======` line is an intentional underline, use an ATX heading (`#`) instead."
+  },
+  {
+    "rule": "TXT-3",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/research/R0001-sample.md",
+      "range": {
+        "start": { "line": 29, "character": 0 },
+        "end": { "line": 29, "character": 7 }
+      }
+    },
+    "message": "Merge conflict marker `>>>>>>>` left in the file.",
+    "suggestion": "Finish the conflict resolution — keep the intended text and delete the marker lines. If a `=======` line is an intentional underline, use an ATX heading (`#`) instead."
+  }
+]

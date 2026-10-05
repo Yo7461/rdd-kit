@@ -1,0 +1,16 @@
+[
+  {
+    "rule": "SIZE-3",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/spec/sample.md",
+      "range": {
+        "start": { "line": 200, "character": 0 },
+        "end": { "line": 200, "character": 13 }
+      }
+    },
+    "message": "The contract file has too many lines (201). Maximum allowed is 200.",
+    "suggestion": "Move some contracts into another domain file to fit within 200 lines."
+  }
+]

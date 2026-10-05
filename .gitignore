@@ -1,0 +1,15 @@
+# Odds and ends the OS and editors create
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp
+*~
+
+# Local-only settings (not shared)
+.claude/settings.local.json
+
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo

@@ -1,0 +1,34 @@
+{
+  "name": "@rdd-kit/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lint engine for roadmap-driven development records.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "mdast-util-from-markdown": "^2.0.3",
+    "mdast-util-frontmatter": "^2.0.1",
+    "mdast-util-to-string": "^4.0.0",
+    "micromark-extension-frontmatter": "^2.0.0",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/mdast": "^4.0.4"
+  }
+}

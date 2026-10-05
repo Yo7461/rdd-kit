@@ -1,0 +1,16 @@
+[
+  {
+    "rule": "SIZE-4",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/phases/P0001-first/status.md",
+      "range": {
+        "start": { "line": 20, "character": 0 },
+        "end": { "line": 20, "character": 5 }
+      }
+    },
+    "message": "Outcome Summary has too many lines (11 non-empty). Maximum allowed is 10.",
+    "suggestion": "Update the summary to fit within 10 lines. This is the one section that may be rewritten as it rolls forward."
+  }
+]

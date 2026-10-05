@@ -1,0 +1,20 @@
+{
+  "name": "rdd-kit",
+  "description": "The /roadmap skill for roadmap-driven development, plus roadmap-lint — a CLI linter that makes its records tool-verifiable.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Yo7461"
+  },
+  "homepage": "https://github.com/Yo7461/rdd-kit",
+  "repository": "https://github.com/Yo7461/rdd-kit",
+  "license": "Apache-2.0",
+  "keywords": [
+    "roadmap-driven-development",
+    "rdd",
+    "roadmap",
+    "planning",
+    "spec",
+    "lint",
+    "loop-engineering"
+  ]
+}

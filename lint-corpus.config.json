@@ -1,0 +1,11 @@
+{
+  "rules": {
+    "GIT-1": { "enabled": false },
+    "GIT-2": { "enabled": false },
+    "GIT-3": { "enabled": false },
+    "GIT-4": { "enabled": false },
+    "GIT-5": { "enabled": false },
+    "GIT-6": { "enabled": false },
+    "GIT-7": { "enabled": false }
+  }
+}

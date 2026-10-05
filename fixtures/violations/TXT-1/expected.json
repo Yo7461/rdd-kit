@@ -1,0 +1,16 @@
+[
+  {
+    "rule": "TXT-1",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/research/R0001-sample.md",
+      "range": {
+        "start": { "line": 25, "character": 12 },
+        "end": { "line": 25, "character": 13 }
+      }
+    },
+    "message": "Unexpected a U+FFFD replacement character — a trace of invalid UTF-8 bytes or garbled text.",
+    "suggestion": "Fix the text — re-fetch it from the original source and save the file as UTF-8."
+  }
+]

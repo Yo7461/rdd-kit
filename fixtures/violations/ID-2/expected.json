@@ -1,0 +1,16 @@
+[
+  {
+    "rule": "ID-2",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/status.md",
+      "range": {
+        "start": { "line": 64, "character": 0 },
+        "end": { "line": 64, "character": 58 }
+      }
+    },
+    "message": "Inconsistent state for P0002: roadmap.md says `active`, Phase Index says `planned`.",
+    "suggestion": "Update roadmap.md, Phase Index, and phases/ so all three agree with what the session records say happened."
+  }
+]

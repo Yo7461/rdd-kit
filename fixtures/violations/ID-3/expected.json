@@ -1,0 +1,12 @@
+[
+  {
+    "rule": "ID-3",
+    "severity": "error",
+    "anchor": {
+      "kind": "file",
+      "file": "roadmap/phases/P008-bad/status.md"
+    },
+    "message": "Phase directory name does not follow the `P####-<lowercase-kebab>` convention: `phases/P008-bad`.",
+    "suggestion": "Rename it to follow the conventions in schemas.md § IDs and naming. The ID number itself never changes."
+  }
+]

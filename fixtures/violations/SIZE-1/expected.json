@@ -1,0 +1,16 @@
+[
+  {
+    "rule": "SIZE-1",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/status.md",
+      "range": {
+        "start": { "line": 59, "character": 0 },
+        "end": { "line": 59, "character": 33 }
+      }
+    },
+    "message": "The root status.md has too many lines (61, not counting the Phase Index section). Maximum allowed is 60.",
+    "suggestion": "Remove detail from the Next tasks to fit within 60 lines (the Phase Index section is not counted)."
+  }
+]

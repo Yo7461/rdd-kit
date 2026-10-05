@@ -1,0 +1,16 @@
+[
+  {
+    "rule": "BID-1",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/phases/P0002-second/sessions/S0002.md",
+      "range": {
+        "start": { "line": 7, "character": 19 },
+        "end": { "line": 7, "character": 24 }
+      }
+    },
+    "message": "Inconsistent `artifacts` entry R0001: neither its `created` nor its `completed` points to S0002 (R0001 has `created: S0001`, `completed: S0001`).",
+    "suggestion": "Fix `created` or `completed` in R0001, or remove R0001 from `artifacts`."
+  }
+]

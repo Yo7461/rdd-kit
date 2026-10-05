@@ -1,0 +1,16 @@
+# Text files are LF in the repository and in every working tree. The fixture check and the test
+# snapshots compare bytes and assume LF, so a CRLF checkout — what git on Windows makes by default —
+# fails them
+* text=auto eol=lf
+
+# The distribution bundles are generated files and take no EOL conversion — a CRLF copy made under
+# autocrlf breaks the byte comparison of build-plugin --check and the shebang on Unix
+plugin/bin/** -text
+packages/cli/bundle/** -text
+# The license files (the root one, its copies, and the generated third-party lists) stay LF for the same
+# reason — the byte comparison of build-plugin --check
+/LICENSE -text
+plugin/LICENSE -text
+plugin/THIRD-PARTY-LICENSES.txt -text
+packages/cli/LICENSE -text
+packages/cli/THIRD-PARTY-LICENSES.txt -text

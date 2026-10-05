@@ -1,0 +1,16 @@
+[
+  {
+    "rule": "SIZE-2",
+    "severity": "error",
+    "anchor": {
+      "kind": "range",
+      "file": "roadmap/spec/map.md",
+      "range": {
+        "start": { "line": 80, "character": 0 },
+        "end": { "line": 80, "character": 44 }
+      }
+    },
+    "message": "spec/map.md has too many lines (81). Maximum allowed is 80.",
+    "suggestion": "Move the details to a domain file to fit within 80 lines."
+  }
+]
