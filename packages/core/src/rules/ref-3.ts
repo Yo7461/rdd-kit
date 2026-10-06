@@ -1,5 +1,6 @@
 import { shownOptionValue } from '../config.js';
 import type { ParsedFile } from '../parse/parsed-file.js';
+import path from '../path.js';
 import { findH2Section } from '../parse/sections.js';
 import { isRecord } from './helpers.js';
 import type { RuleDiagnostic, RuleModule } from './types.js';
@@ -139,7 +140,8 @@ export const ref3: RuleModule = {
         const lastSegment = token.slice(token.lastIndexOf('/') + 1);
         if (!lastSegment.includes('.')) continue; // A mention of a directory is out of scope (the same outline as REF-2's inline-code check)
         if (!corpus.pathExists(token)) continue; // A missing target belongs to REF-2
-        if (git.trackedFiles.has(token)) continue;
+        // Tracked paths are listed normalized, so the token is normalized too (`roadmap/./x.md` is `roadmap/x.md`)
+        if (git.trackedFiles.has(path.posix.normalize(token))) continue;
         out.push({
           anchor: { kind: 'range', file: file.relPath, range },
           message: `Referenced path is not tracked by git: \`${token}\` (it exists but is not committed).`,

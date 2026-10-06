@@ -86,6 +86,22 @@ export async function runLint(
     }),
   );
   await git?.loadLineHistory([...askedHistories]);
+  // The real pass answers from what was loaded — and, like pathExists above, throws on a file the
+  // recording pass did not ask about, instead of handing the rule a null that looks like "not tracked"
+  const answering: CorpusIndex = {
+    ...corpus,
+    git:
+      git &&
+      ({
+        ...git,
+        lineHistory: (relPath) => {
+          if (!askedHistories.has(relPath)) {
+            throw new Error(`lineHistory was asked for ${relPath}, which the recording pass did not record.`);
+          }
+          return git.lineHistory(relPath);
+        },
+      } satisfies typeof git),
+  };
 
   const notices: string[] = [];
   if (git === null) {
@@ -120,7 +136,7 @@ export async function runLint(
     if (rule.checkCorpus) {
       const found = rule.checkCorpus({
         files,
-        corpus,
+        corpus: answering,
         options: resolved.options,
         notice: (message) => notices.push(message),
         now,

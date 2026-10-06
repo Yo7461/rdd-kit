@@ -37,6 +37,7 @@ export async function resolveTarget(inputPath: string, host: Host): Promise<Road
   return null;
 }
 
+/** Turns a path that came from Windows into the POSIX form the diagnostics use. */
 export function toPosix(relPath: string): string {
   return relPath.replace(/\\/g, '/');
 }
@@ -67,20 +68,23 @@ export function classifyFile(relPath: string): FileType {
 /** Lists every regular file under roadmap/ in ascending relPath order (so the order does not depend on the environment). */
 export async function collectFiles(target: RoadmapTarget, host: Host): Promise<RoadmapFileRef[]> {
   const files: RoadmapFileRef[] = [];
-  // Directories are listed side by side. A symbolic link (`other`) is neither followed nor counted
-  const walk = async (dir: string): Promise<void> => {
+  // Directories are listed side by side. A symbolic link (`other`) is neither followed nor counted.
+  // A name is appended as the host returned it, not normalized — on POSIX a backslash is part of a
+  // name, not a separator — and the relative path grows with the walk, so it never depends on the
+  // platform (roadmapDir is normalized and ends in `roadmap`, so every relPath starts with `roadmap/`)
+  const walk = async (dir: string, rel: string): Promise<void> => {
     const entries = await host.listDir(dir);
     await Promise.all(
       entries.map(async (entry) => {
-        const absPath = path.join(dir, entry.name);
-        if (entry.kind === 'dir') return walk(absPath);
+        const absPath = `${dir}/${entry.name}`;
+        const relPath = `${rel}/${entry.name}`;
+        if (entry.kind === 'dir') return walk(absPath, relPath);
         if (entry.kind !== 'file') return;
-        const relPath = toPosix(path.relative(target.baseDir, absPath));
         files.push({ absPath, relPath, type: classifyFile(relPath) });
       }),
     );
   };
-  await walk(target.roadmapDir);
+  await walk(target.roadmapDir, 'roadmap');
   files.sort((a, b) => (a.relPath < b.relPath ? -1 : a.relPath > b.relPath ? 1 : 0));
   return files;
 }

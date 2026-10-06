@@ -7552,93 +7552,115 @@ function resolveRuleConfig(rule, config, notice) {
 }
 
 // packages/core/dist/path.js
-function slashes(p) {
-  return p.replace(/\\/g, "/");
-}
-function rootOf(p) {
-  if (/^[A-Za-z]:\//.test(p))
-    return `${p[0]?.toUpperCase() ?? ""}:/`;
-  if (p.startsWith("//"))
-    return "//";
-  if (p.startsWith("/"))
-    return "/";
-  return "";
-}
-function isAbsolute(p) {
-  return rootOf(slashes(p)) !== "";
-}
-function normalize(p) {
-  const s = slashes(p);
-  const root = rootOf(s);
-  const segments = [];
-  for (const segment of s.slice(root.length).split("/")) {
-    if (segment === "" || segment === ".")
-      continue;
-    if (segment === "..") {
-      if (segments.length > 0 && segments[segments.length - 1] !== "..")
-        segments.pop();
-      else if (root === "")
-        segments.push("..");
-      continue;
+function build(hostPaths) {
+  const slashes = (p) => hostPaths ? p.replace(/\\/g, "/") : p;
+  const rootOf = (p) => {
+    if (hostPaths) {
+      if (/^[A-Za-z]:\//.test(p))
+        return `${p[0]?.toUpperCase() ?? ""}:/`;
+      const unc = /^\/\/[^/]+\/[^/]+/.exec(p);
+      if (unc)
+        return `${unc[0]}/`;
+      if (p.startsWith("//"))
+        return "//";
     }
-    segments.push(segment);
-  }
-  const joined = segments.join("/");
-  if (root !== "")
-    return root + joined;
-  return joined === "" ? "." : joined;
+    if (p.startsWith("/"))
+      return "/";
+    return "";
+  };
+  const isAbsolute2 = (p) => rootOf(slashes(p)) !== "";
+  const normalize2 = (p) => {
+    const s = slashes(p);
+    const root = rootOf(s);
+    const segments = [];
+    for (const segment of s.slice(root.length).split("/")) {
+      if (segment === "" || segment === ".")
+        continue;
+      if (segment === "..") {
+        if (segments.length > 0 && segments[segments.length - 1] !== "..")
+          segments.pop();
+        else if (root === "")
+          segments.push("..");
+        continue;
+      }
+      segments.push(segment);
+    }
+    let out = root + segments.join("/");
+    if (out === "")
+      out = ".";
+    if (s.endsWith("/") && out !== root && !out.endsWith("/"))
+      out += "/";
+    return out;
+  };
+  const trimmed = (p) => {
+    const n = normalize2(p);
+    const root = rootOf(n);
+    let end = n.length;
+    while (end > root.length && n[end - 1] === "/")
+      end--;
+    return end === n.length ? n : n.slice(0, end);
+  };
+  const join2 = (...parts) => {
+    const kept = parts.filter((part) => part !== "");
+    return kept.length === 0 ? "." : normalize2(kept.join("/"));
+  };
+  const resolve2 = (...parts) => {
+    let acc = "";
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const part = parts[i] ?? "";
+      if (part === "")
+        continue;
+      acc = acc === "" ? part : `${part}/${acc}`;
+      if (isAbsolute2(part))
+        break;
+    }
+    return trimmed(acc);
+  };
+  const dirname2 = (p) => {
+    const n = trimmed(p);
+    const root = rootOf(n);
+    if (n === root)
+      return n;
+    const i = n.lastIndexOf("/");
+    if (i < 0)
+      return ".";
+    if (i < root.length)
+      return root;
+    return n.slice(0, i);
+  };
+  const basename3 = (p, ext) => {
+    const n = slashes(p).replace(/\/+$/, "");
+    const name = n.slice(n.lastIndexOf("/") + 1);
+    if (ext !== void 0 && ext !== "" && name.endsWith(ext))
+      return name.slice(0, -ext.length);
+    return name;
+  };
+  const relative2 = (from, to) => {
+    const a = trimmed(from);
+    const b = trimmed(to);
+    const rootA = rootOf(a);
+    const rootB = rootOf(b);
+    if (rootA !== rootB)
+      return b;
+    const segmentsA = a === rootA || a === "." ? [] : a.slice(rootA.length).split("/");
+    const segmentsB = b === rootB || b === "." ? [] : b.slice(rootB.length).split("/");
+    let common = 0;
+    while (common < segmentsA.length && common < segmentsB.length && segmentsA[common] === segmentsB[common])
+      common++;
+    const up = segmentsA.slice(common).map(() => "..");
+    return [...up, ...segmentsB.slice(common)].join("/");
+  };
+  return { isAbsolute: isAbsolute2, normalize: normalize2, join: join2, resolve: resolve2, dirname: dirname2, basename: basename3, relative: relative2 };
 }
-function join(...parts) {
-  const kept = parts.filter((part) => part !== "");
-  return kept.length === 0 ? "." : normalize(kept.join("/"));
-}
-function resolve(...parts) {
-  let acc = "";
-  for (let i = parts.length - 1; i >= 0; i--) {
-    const part = parts[i] ?? "";
-    if (part === "")
-      continue;
-    acc = acc === "" ? part : `${part}/${acc}`;
-    if (isAbsolute(part))
-      break;
-  }
-  return normalize(acc);
-}
-function dirname(p) {
-  const n = normalize(p);
-  const root = rootOf(n);
-  if (n === root)
-    return n;
-  const i = n.lastIndexOf("/");
-  if (i < 0)
-    return ".";
-  if (i < root.length)
-    return root;
-  return n.slice(0, i);
-}
-function basename(p, ext) {
-  const n = slashes(p).replace(/\/+$/, "");
-  const name = n.slice(n.lastIndexOf("/") + 1);
-  if (ext !== void 0 && ext !== "" && name !== ext && name.endsWith(ext))
-    return name.slice(0, -ext.length);
-  return name;
-}
-function relative(from, to) {
-  const a = normalize(from);
-  const b = normalize(to);
-  const rootA = rootOf(a);
-  const rootB = rootOf(b);
-  if (rootA !== rootB)
-    return b;
-  const segmentsA = a === rootA || a === "." ? [] : a.slice(rootA.length).split("/");
-  const segmentsB = b === rootB || b === "." ? [] : b.slice(rootB.length).split("/");
-  let common = 0;
-  while (common < segmentsA.length && common < segmentsB.length && segmentsA[common] === segmentsB[common])
-    common++;
-  const up = segmentsA.slice(common).map(() => "..");
-  return [...up, ...segmentsB.slice(common)].join("/");
-}
-var posix = { join, normalize, dirname, basename };
+var host = build(true);
+var posixFns = build(false);
+var { isAbsolute, normalize, join, resolve, dirname, basename, relative } = host;
+var posix = {
+  join: posixFns.join,
+  normalize: posixFns.normalize,
+  dirname: posixFns.dirname,
+  basename: posixFns.basename
+};
 var path = { isAbsolute, normalize, join, resolve, dirname, basename, relative, posix };
 var path_default = path;
 
@@ -7649,14 +7671,14 @@ var ConfigError = class extends Error {
 function isRecord(value2) {
   return typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
 }
-async function discoverConfigFile(baseDir, host) {
+async function discoverConfigFile(baseDir, host2) {
   const candidate = path_default.join(baseDir, CONFIG_FILE_NAME);
-  return await host.exists(candidate) ? candidate : null;
+  return await host2.exists(candidate) ? candidate : null;
 }
-async function loadConfigFile(filePath, host) {
+async function loadConfigFile(filePath, host2) {
   let raw;
   try {
-    raw = await host.readText(filePath);
+    raw = await host2.readText(filePath);
   } catch {
     throw new ConfigError(`Cannot read the config file: ${filePath}.`);
   }
@@ -15018,21 +15040,18 @@ function parseMarkdown(normalizedText) {
 }
 
 // packages/core/dist/files.js
-async function resolveTarget(inputPath, host) {
+async function resolveTarget(inputPath, host2) {
   const abs = path_default.resolve(inputPath);
-  if ((await host.stat(abs))?.kind !== "dir")
+  if ((await host2.stat(abs))?.kind !== "dir")
     return null;
   const sub = path_default.join(abs, "roadmap");
-  if ((await host.stat(sub))?.kind === "dir") {
+  if ((await host2.stat(sub))?.kind === "dir") {
     return { baseDir: abs, roadmapDir: sub };
   }
   if (path_default.basename(abs) === "roadmap") {
     return { baseDir: path_default.dirname(abs), roadmapDir: abs };
   }
   return null;
-}
-function toPosix(relPath) {
-  return relPath.replace(/\\/g, "/");
 }
 function classifyFile(relPath) {
   if (relPath === "roadmap/roadmap.md")
@@ -15053,21 +15072,21 @@ function classifyFile(relPath) {
     return "experiment";
   return "unknown";
 }
-async function collectFiles(target, host) {
+async function collectFiles(target, host2) {
   const files = [];
-  const walk2 = async (dir) => {
-    const entries = await host.listDir(dir);
+  const walk2 = async (dir, rel) => {
+    const entries = await host2.listDir(dir);
     await Promise.all(entries.map(async (entry) => {
-      const absPath = path_default.join(dir, entry.name);
+      const absPath = `${dir}/${entry.name}`;
+      const relPath = `${rel}/${entry.name}`;
       if (entry.kind === "dir")
-        return walk2(absPath);
+        return walk2(absPath, relPath);
       if (entry.kind !== "file")
         return;
-      const relPath = toPosix(path_default.relative(target.baseDir, absPath));
       files.push({ absPath, relPath, type: classifyFile(relPath) });
     }));
   };
-  await walk2(target.roadmapDir);
+  await walk2(target.roadmapDir, "roadmap");
   files.sort((a, b) => a.relPath < b.relPath ? -1 : a.relPath > b.relPath ? 1 : 0);
   return files;
 }
@@ -15085,8 +15104,8 @@ function parseSource(relPath, rawText) {
     markdown: relPath.endsWith(".md") ? parseMarkdown(text3) : null
   };
 }
-async function parseRoadmapFile(ref, host) {
-  return parseSource(ref.relPath, await host.readText(ref.absPath));
+async function parseRoadmapFile(ref, host2) {
+  return parseSource(ref.relPath, await host2.readText(ref.absPath));
 }
 
 // packages/core/dist/parse/sections.js
@@ -15265,9 +15284,9 @@ function parseBlamePorcelain(raw) {
   }
   return out;
 }
-async function collectGitInfo(baseDir, host) {
+async function collectGitInfo(baseDir, host2) {
   const git = async (...args) => {
-    const ran = await host.run(["git", "-C", baseDir, "--no-optional-locks", ...args]);
+    const ran = await host2.run(["git", "-C", baseDir, "--no-optional-locks", ...args]);
     if (ran.exitCode !== 0) {
       throw new Error(`git ${args.join(" ")} exited with ${ran.exitCode}: ${ran.stderr.trim()}`);
     }
@@ -17826,7 +17845,7 @@ var ref3 = {
           continue;
         if (!corpus.pathExists(token))
           continue;
-        if (git.trackedFiles.has(token))
+        if (git.trackedFiles.has(path_default.posix.normalize(token)))
           continue;
         out.push({
           anchor: { kind: "range", file: file.relPath, range },
@@ -17912,11 +17931,11 @@ function sortDiagnostics(diagnostics) {
 }
 
 // packages/core/dist/engine.js
-async function runLint(target, host, config = {}, options = {}) {
+async function runLint(target, host2, config = {}, options = {}) {
   const now = options.now ?? /* @__PURE__ */ new Date();
-  const refs = await collectFiles(target, host);
-  const files = await Promise.all(refs.filter((ref) => ref.relPath.endsWith(".md")).map((ref) => parseRoadmapFile(ref, host)));
-  const git = await collectGitInfo(target.baseDir, host);
+  const refs = await collectFiles(target, host2);
+  const files = await Promise.all(refs.filter((ref) => ref.relPath.endsWith(".md")).map((ref) => parseRoadmapFile(ref, host2)));
+  const git = await collectGitInfo(target.baseDir, host2);
   const existing = /* @__PURE__ */ new Map();
   const corpus = buildCorpusIndex(refs.map((ref) => ({ relPath: ref.relPath, type: ref.type })), files, (relPath) => {
     const known = existing.get(relPath);
@@ -17952,9 +17971,21 @@ async function runLint(target, host, config = {}, options = {}) {
     }, now });
   }
   await Promise.all([...askedPaths].map(async (relPath) => {
-    existing.set(relPath, await host.exists(path_default.join(target.baseDir, relPath)));
+    existing.set(relPath, await host2.exists(path_default.join(target.baseDir, relPath)));
   }));
   await git?.loadLineHistory([...askedHistories]);
+  const answering = {
+    ...corpus,
+    git: git && {
+      ...git,
+      lineHistory: (relPath) => {
+        if (!askedHistories.has(relPath)) {
+          throw new Error(`lineHistory was asked for ${relPath}, which the recording pass did not record.`);
+        }
+        return git.lineHistory(relPath);
+      }
+    }
+  };
   const notices = [];
   if (git === null) {
     notices.push("Skipped git-dependent checks (GIT-1\u2013GIT-7 and the REF-3 untracked-path detection) because git is unavailable.");
@@ -17985,7 +18016,7 @@ async function runLint(target, host, config = {}, options = {}) {
     if (rule.checkCorpus) {
       const found = rule.checkCorpus({
         files,
-        corpus,
+        corpus: answering,
         options: resolved.options,
         notice: (message) => notices.push(message),
         now
@@ -18064,7 +18095,7 @@ var nodeHost = {
   },
   run: (argv) => new Promise((resolve2, reject) => {
     const [command = "", ...args] = argv;
-    (0, import_node_child_process.execFile)(
+    const child = (0, import_node_child_process.execFile)(
       command,
       args,
       { encoding: "utf8", windowsHide: true, maxBuffer: 64 * 1024 * 1024 },
@@ -18074,6 +18105,7 @@ var nodeHost = {
         else reject(error);
       }
     );
+    child.stdin?.end();
   })
 };
 

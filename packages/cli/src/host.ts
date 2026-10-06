@@ -32,7 +32,7 @@ export const nodeHost: Host = {
   run: (argv) =>
     new Promise((resolve, reject) => {
       const [command = '', ...args] = argv;
-      execFile(
+      const child = execFile(
         command,
         args,
         { encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024 },
@@ -44,5 +44,7 @@ export const nodeHost: Host = {
           else reject(error);
         },
       );
+      // Nothing is written to the child: close its stdin, so a command that reads it sees EOF instead of waiting
+      child.stdin?.end();
     }),
 };

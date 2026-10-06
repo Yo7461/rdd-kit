@@ -6,12 +6,14 @@ import path, { basename, dirname, isAbsolute, join, normalize, posix, relative, 
 // the working directory
 
 describe('normalize', () => {
-  it('turns backslashes into slashes, folds . and .., and drops a trailing slash', () => {
-    expect(normalize('a\\b\\..\\c\\.\\d\\')).toBe('a/c/d');
+  it('turns backslashes into slashes, folds . and .., and keeps a trailing slash as node:path does', () => {
+    expect(normalize('a\\b\\..\\c\\.\\d\\')).toBe('a/c/d/');
     expect(normalize('/a//b/./c/../d')).toBe('/a/b/d');
+    expect(normalize('roadmap/x.md/')).toBe('roadmap/x.md/'); // a link to a file written with a slash stays distinguishable
     expect(normalize('')).toBe('.');
     expect(normalize('.')).toBe('.');
     expect(normalize('a/..')).toBe('.');
+    expect(normalize('a/../')).toBe('./');
   });
 
   it('keeps a relative path that climbs above its start, and stops an absolute one at its root', () => {
@@ -21,11 +23,23 @@ describe('normalize', () => {
     expect(normalize('C:\\..\\a')).toBe('C:/a');
   });
 
-  it('reads a drive and a UNC prefix as roots, the drive letter in upper case', () => {
+  it('reads a drive and a UNC share as roots, the drive letter in upper case, and does not climb above a share', () => {
     expect(normalize('c:\\Projects\\x\\..\\z')).toBe('C:/Projects/z');
     expect(normalize('C:/')).toBe('C:/');
     expect(normalize('\\\\server\\share\\a\\..\\b')).toBe('//server/share/b');
+    expect(normalize('//server/share/proj/../../x')).toBe('//server/share/x');
     expect(normalize('/')).toBe('/');
+  });
+});
+
+describe('posix', () => {
+  it('reads only / as a separator and only / as a root, as node:path.posix does', () => {
+    expect(posix.normalize('roadmap/assets\\E0001\\run.mjs')).toBe('roadmap/assets\\E0001\\run.mjs');
+    expect(posix.join('a\\b', 'c')).toBe('a\\b/c');
+    expect(posix.normalize('C:/a/../b')).toBe('C:/b'); // a drive is an ordinary segment here
+    expect(posix.normalize('C:/..')).toBe('.');
+    expect(posix.dirname('a\\b/c')).toBe('a\\b');
+    expect(posix.basename('a\\b/c.md', '.md')).toBe('c');
   });
 });
 
@@ -50,13 +64,16 @@ describe('join and resolve', () => {
     expect(join('/a/', '/b')).toBe('/a/b');
   });
 
-  it('resolve reads right to left up to the last absolute segment, and keeps a relative result relative', () => {
+  it('resolve reads right to left up to the last absolute segment, drops a trailing slash, and keeps a relative result relative', () => {
     expect(resolve('C:\\proj', 'roadmap\\status.md')).toBe('C:/proj/roadmap/status.md');
     expect(resolve('/x', 'C:/proj', 'a')).toBe('C:/proj/a');
     expect(resolve('/x', '/y/z', '..', 'w')).toBe('/y/w');
     expect(resolve('a', 'b')).toBe('a/b');
     expect(resolve('.')).toBe('.');
     expect(resolve('C:\\proj\\roadmap\\..\\roadmap')).toBe('C:/proj/roadmap');
+    expect(resolve('C:\\proj\\')).toBe('C:/proj');
+    expect(resolve('/a/b/')).toBe('/a/b');
+    expect(resolve('C:/')).toBe('C:/');
   });
 });
 
@@ -69,13 +86,15 @@ describe('dirname and basename', () => {
     expect(dirname('/')).toBe('/');
     expect(dirname('a')).toBe('.');
     expect(dirname('a/b/')).toBe('a');
+    expect(dirname('/a/b/')).toBe('/a');
+    expect(dirname('//server/share/a')).toBe('//server/share/');
   });
 
   it('basename is the last segment, with the extension removed as node:path removes it', () => {
     expect(basename('/a/b/c.md')).toBe('c.md');
     expect(basename('C:\\a\\b\\S0001.md', '.md')).toBe('S0001');
     expect(basename('roadmap/x/')).toBe('x');
-    expect(basename('.md', '.md')).toBe('.md'); // the name is the extension alone — kept whole
+    expect(basename('.md', '.md')).toBe(''); // the name is the extension alone — node:path gives '' too
     expect(basename('a.txt', '.md')).toBe('a.txt');
   });
 });
@@ -89,6 +108,7 @@ describe('relative', () => {
     expect(relative('/a/b', '/a/b')).toBe('');
     expect(relative('a/b', 'a/c')).toBe('../c');
     expect(relative('/', '/a')).toBe('a');
+    expect(relative('/a/', '/a/b/')).toBe('b');
   });
 
   it('returns the target as it is when the two paths have different roots', () => {
