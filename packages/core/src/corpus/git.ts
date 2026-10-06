@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import type { Host } from '../host.js';
 
 export interface GitCommitInfo {
   hash: string;
@@ -25,7 +25,7 @@ export function isUncommittedHash(hash: string): boolean {
 
 /**
  * A snapshot of the git state used by the GIT rules (GIT-1–GIT-7) and REF-3's untracked check, plus
- * `lineHistory`, a lazily read and memoized view of `git blame` for the one rule that needs it.
+ * `lineHistory`, a view of `git blame` for the one rule that needs it, read ahead by `loadLineHistory`.
  * The engine collects it once when a run starts and injects it as corpus.git.
  */
 export interface GitInfo {
@@ -42,11 +42,14 @@ export interface GitInfo {
   /** Whether the repository is a shallow clone — its truncated history dates every line at the grafted commit, so GIT-7 skips it with a notice */
   shallow: boolean;
   /**
-   * The last change of every line of a tracked file (index = 0-based line of the working-tree file), read from
-   * `git blame --porcelain` the first time it is asked for and memoized. null when the file is not tracked or
-   * blame fails — the caller (GIT-7) skips with a notice. Only the hash and the committer time are kept.
+   * The last change of every line of a tracked file (index = 0-based line of the working-tree file), as
+   * loadLineHistory read it from `git blame --porcelain`. null when the file is not tracked, blame failed,
+   * or the file was not loaded — the caller (GIT-7) skips with a notice. Only the hash and the committer
+   * time are kept.
    */
   lineHistory(relPath: string): LineHistory[] | null;
+  /** Reads the blame of the given files ahead (each once), so that lineHistory can answer synchronously from a rule */
+  loadLineHistory(relPaths: readonly string[]): Promise<void>;
 }
 
 const SEP = '\u001F';
@@ -95,30 +98,34 @@ export function parseBlamePorcelain(raw: string): LineHistory[] {
  * Collects the git state. Returns null when git is absent or this is not a repository (the caller skips and emits a notice).
  * Paths are read with -z (NUL-separated), so quotepath has no effect on them.
  */
-export function collectGitInfo(baseDir: string): GitInfo | null {
+export async function collectGitInfo(baseDir: string, host: Host): Promise<GitInfo | null> {
   // --no-optional-locks: the linter only reads. Without it `git status` refreshes the index cache under
   // .git/ as a side effect, which takes index.lock and can collide with a git command the user runs at
-  // the same moment (the hook runs after every edit)
-  const git = (...args: string[]): string =>
-    execFileSync('git', ['-C', baseDir, '--no-optional-locks', ...args], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+  // the same moment (the hook runs after every edit).
+  // The host reports the exit code as it is; a non-zero exit is turned into an error here so that every
+  // command below keeps the same meaning it had with a throwing runner
+  const git = async (...args: string[]): Promise<string> => {
+    const ran = await host.run(['git', '-C', baseDir, '--no-optional-locks', ...args]);
+    if (ran.exitCode !== 0) {
+      throw new Error(`git ${args.join(' ')} exited with ${ran.exitCode}: ${ran.stderr.trim()}`);
+    }
+    return ran.stdout;
+  };
   try {
-    if (git('rev-parse', '--is-inside-work-tree').trim() !== 'true') return null;
+    if ((await git('rev-parse', '--is-inside-work-tree')).trim() !== 'true') return null;
   } catch {
     return null;
   }
 
   const splitZ = (raw: string): string[] => raw.split('\u0000').filter((s) => s.length > 0);
 
-  const trackedFiles = new Set(splitZ(git('ls-files', '-z')));
-  const ignoredTracked = splitZ(git('ls-files', '-ciz', '--exclude-standard')).sort();
+  const trackedFiles = new Set(splitZ(await git('ls-files', '-z')));
+  const ignoredTracked = splitZ(await git('ls-files', '-ciz', '--exclude-standard')).sort();
 
   // porcelain -z: NUL-separated "XY path". A rename (X is R or C) is followed by one more path right after it
   const uncommitted = new Set<string>();
   // --untracked-files=normal: a wholly untracked directory collapses to one entry, whatever the user's status.showUntrackedFiles says
-  const statusChunks = splitZ(git('status', '--porcelain', '-z', '--untracked-files=normal', '--', 'roadmap'));
+  const statusChunks = splitZ(await git('status', '--porcelain', '-z', '--untracked-files=normal', '--', 'roadmap'));
   for (let i = 0; i < statusChunks.length; i++) {
     const chunk = statusChunks[i] ?? '';
     const state = chunk.slice(0, 2);
@@ -137,18 +144,18 @@ export function collectGitInfo(baseDir: string): GitInfo | null {
   // commit is in scope. Any other failure of the history commands still surfaces as an execution error
   let unborn = false;
   try {
-    git('rev-parse', '-q', '--verify', 'HEAD');
+    await git('rev-parse', '-q', '--verify', 'HEAD');
   } catch {
     unborn = true;
   }
   const boundary = unborn
     ? undefined
-    : git('log', '--diff-filter=A', '--format=%H', '--reverse', '--', 'roadmap')
+    : (await git('log', '--diff-filter=A', '--format=%H', '--reverse', '--', 'roadmap'))
         .split('\n')
         .find((l) => l.length > 0);
   const commits: GitCommitInfo[] = [];
   if (boundary) {
-    for (const line of git('log', `--format=%H${SEP}%P${SEP}%s`).split('\n')) {
+    for (const line of (await git('log', `--format=%H${SEP}%P${SEP}%s`)).split('\n')) {
       if (!line) continue;
       const [hash = '', parents = '', subject = ''] = line.split(SEP);
       if (hash === boundary) break;
@@ -159,35 +166,36 @@ export function collectGitInfo(baseDir: string): GitInfo | null {
 
   const headHashes: string[] = unborn
     ? [] // GIT-6 skips its record-side checks
-    : git('rev-list', 'HEAD')
+    : (await git('rev-list', 'HEAD'))
         .split('\n')
         .filter((l) => l.length > 0)
         .sort();
 
   let shallow = false;
   try {
-    shallow = git('rev-parse', '--is-shallow-repository').trim() === 'true';
+    shallow = (await git('rev-parse', '--is-shallow-repository')).trim() === 'true';
   } catch {
     // The question itself failed (both it and --no-optional-locks date from git 2.15, so a git old
     // enough to lack it never gets this far) — read as a full repository
   }
 
-  // Blame is read on demand (one process per file asked for, once) — a run with GIT-7 turned off pays nothing
+  // Blame is read ahead for the files a rule will ask for (one process per file, once) — a run with GIT-7 turned off pays nothing
   const histories = new Map<string, LineHistory[] | null>();
-  const lineHistory = (relPath: string): LineHistory[] | null => {
-    const cached = histories.get(relPath);
-    if (cached !== undefined) return cached;
-    let history: LineHistory[] | null = null;
-    if (trackedFiles.has(relPath)) {
-      try {
-        history = parseBlamePorcelain(git('blame', '--porcelain', '--', relPath));
-      } catch {
-        history = null; // Deleted in the working tree, or blame refused — GIT-7 skips with a notice
+  const loadLineHistory = async (relPaths: readonly string[]): Promise<void> => {
+    for (const relPath of relPaths) {
+      if (histories.has(relPath)) continue;
+      let history: LineHistory[] | null = null;
+      if (trackedFiles.has(relPath)) {
+        try {
+          history = parseBlamePorcelain(await git('blame', '--porcelain', '--', relPath));
+        } catch {
+          history = null; // Deleted in the working tree, or blame refused — GIT-7 skips with a notice
+        }
       }
+      histories.set(relPath, history);
     }
-    histories.set(relPath, history);
-    return history;
   };
+  const lineHistory = (relPath: string): LineHistory[] | null => histories.get(relPath) ?? null;
 
-  return { trackedFiles, commits, uncommittedRoadmapPaths, ignoredTracked, headHashes, shallow, lineHistory };
+  return { trackedFiles, commits, uncommittedRoadmapPaths, ignoredTracked, headHashes, shallow, lineHistory, loadLineHistory };
 }

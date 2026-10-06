@@ -41,6 +41,7 @@ export type {
 } from './corpus/index.js';
 export { classifyFile, collectFiles, resolveTarget, toPosix } from './files.js';
 export type { FileType, RoadmapFileRef, RoadmapTarget } from './files.js';
+export type { Host, HostEntry, HostKind, HostRunResult, HostStat } from './host.js';
 export {
   CONTRACT_STABILITIES,
   FILE_TYPE_SCHEMAS,

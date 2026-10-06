@@ -26,6 +26,7 @@ const gitInfo = (over: Partial<GitInfo> = {}): GitInfo => ({
   headHashes: [],
   shallow: false,
   lineHistory: () => null,
+  loadLineHistory: async () => {},
   ...over,
 });
 
@@ -468,11 +469,11 @@ describe('the GIT rules and REF-3 on a temporary git repository', () => {
   };
   const gitRules = (rules: string[]) => (d: { rule: string }) => rules.includes(d.rule);
 
-  it('reports no GIT diagnostics on a clean repository that follows the convention', () => {
-    withTempGitRepo(
+  it('reports no GIT diagnostics on a clean repository that follows the convention', async () => {
+    await withTempGitRepo(
       MINIMAL_TREE,
-      (repoDir) => {
-        const result = lintDir(repoDir);
+      async (repoDir) => {
+        const result = await lintDir(repoDir);
         expect(result.diagnostics.filter(gitRules(['GIT-1', 'GIT-2', 'GIT-3', 'REF-3']))).toEqual([]);
         expect(result.notices).toEqual([]);
       },
@@ -480,20 +481,20 @@ describe('the GIT rules and REF-3 on a temporary git repository', () => {
     );
   });
 
-  it('uncommitted changes: a GIT-1 warning once closed, a notice while a session is open', () => {
-    withTempGitRepo(
+  it('uncommitted changes: a GIT-1 warning once closed, a notice while a session is open', async () => {
+    await withTempGitRepo(
       MINIMAL_TREE,
-      (repoDir) => {
+      async (repoDir) => {
         writeFileSync(path.join(repoDir, 'roadmap', 'extra.md'), '# 追記\n');
-        const closed = lintDir(repoDir);
+        const closed = await lintDir(repoDir);
         const git1Diagnostics = closed.diagnostics.filter(gitRules(['GIT-1']));
         expect(git1Diagnostics).toHaveLength(1);
         expect(git1Diagnostics[0]?.anchor).toEqual({ kind: 'file', file: 'roadmap/extra.md' });
 
         // Per-rule config: enabled:false and the severity override take effect on GIT-1
-        const disabled = lintDir(repoDir, { rules: { 'GIT-1': { enabled: false } } });
+        const disabled = await lintDir(repoDir, { rules: { 'GIT-1': { enabled: false } } });
         expect(disabled.diagnostics.filter(gitRules(['GIT-1']))).toEqual([]);
-        const escalated = lintDir(repoDir, { rules: { 'GIT-1': { severity: 'error' } } });
+        const escalated = await lintDir(repoDir, { rules: { 'GIT-1': { severity: 'error' } } });
         expect(escalated.diagnostics.filter(gitRules(['GIT-1']))[0]?.severity).toBe('error');
 
         const statusPath = path.join(repoDir, 'roadmap', 'status.md');
@@ -501,7 +502,7 @@ describe('the GIT rules and REF-3 on a temporary git repository', () => {
           statusPath,
           MINIMAL_TREE['roadmap/status.md'].replace('open_session: null', 'open_session: S0002'),
         );
-        const open = lintDir(repoDir);
+        const open = await lintDir(repoDir);
         expect(open.diagnostics.filter(gitRules(['GIT-1']))).toEqual([]);
         expect(open.notices.some((n) => n.includes('S0002'))).toBe(true);
       },
@@ -509,10 +510,10 @@ describe('the GIT rules and REF-3 on a temporary git repository', () => {
     );
   });
 
-  it('GIT-2: leaves everything before the boundary and the boundary commit itself out of scope, and detects anything off-convention after it, the concatenated form included', () => {
-    withTempGitRepo(
+  it('GIT-2: leaves everything before the boundary and the boundary commit itself out of scope, and detects anything off-convention after it, the concatenated form included', async () => {
+    await withTempGitRepo(
       { 'src/setup.ts': 'export {};\n' },
-      (repoDir) => {
+      async (repoDir) => {
         const git = (...args: string[]) =>
           execFileSync('git', ['-C', repoDir, ...args], { encoding: 'utf8' });
         // Adding roadmap/ with a subject that has no S#### = the boundary commit (the equivalent of init's first commit — out of scope)
@@ -520,7 +521,7 @@ describe('the GIT rules and REF-3 on a temporary git repository', () => {
         writeFileSync(path.join(repoDir, 'roadmap', 'status.md'), MINIMAL_TREE['roadmap/status.md']);
         git('add', '-A');
         git('commit', '-q', '-m', '[init] roadmap 初期化');
-        expect(lintDir(repoDir).diagnostics.filter(gitRules(['GIT-2']))).toEqual([]);
+        expect((await lintDir(repoDir)).diagnostics.filter(gitRules(['GIT-2']))).toEqual([]);
 
         // After the boundary: on top of off-convention subjects, the [S####][P####] concatenated form is detected too
         writeFileSync(path.join(repoDir, 'roadmap', 'extra.md'), '# x\n');
@@ -530,7 +531,7 @@ describe('the GIT rules and REF-3 on a temporary git repository', () => {
         git('add', '-A');
         git('commit', '-q', '-m', '[S0002][P0001] build: 連結形');
         const connectedHash = git('rev-parse', 'HEAD').trim();
-        const result = lintDir(repoDir);
+        const result = await lintDir(repoDir);
         const git2Diagnostics = result.diagnostics.filter(gitRules(['GIT-2']));
         expect(git2Diagnostics).toHaveLength(2); // The first 'fixture' commit (setup) is before the boundary and the boundary itself is out of scope, leaving the off-convention one plus the concatenated one
         expect(git2Diagnostics.map((d) => d.message).join('\n')).toContain('second without prefix');
@@ -540,26 +541,26 @@ describe('the GIT rules and REF-3 on a temporary git repository', () => {
         writeFileSync(path.join(repoDir, 'roadmap', 'extra.md'), '# z\n');
         git('add', '-A');
         git('commit', '-q', '-m', '[S0003] build: 切替後は S 単独形');
-        const withSince = lintDir(repoDir, {
+        const withSince = await lintDir(repoDir, {
           rules: { 'GIT-2': { options: { sinceCommit: connectedHash } } },
         });
         expect(withSince.diagnostics.filter(gitRules(['GIT-2']))).toEqual([]);
         expect(withSince.notices.filter((n) => n.includes('GIT-2'))).toEqual([]);
 
         // Per-rule config
-        const disabled = lintDir(repoDir, { rules: { 'GIT-2': { enabled: false } } });
+        const disabled = await lintDir(repoDir, { rules: { 'GIT-2': { enabled: false } } });
         expect(disabled.diagnostics.filter(gitRules(['GIT-2']))).toEqual([]);
-        const escalated = lintDir(repoDir, { rules: { 'GIT-2': { severity: 'error' } } });
+        const escalated = await lintDir(repoDir, { rules: { 'GIT-2': { severity: 'error' } } });
         expect(escalated.diagnostics.filter(gitRules(['GIT-2']))[0]?.severity).toBe('error');
       },
       'fixture',
     );
   });
 
-  it('GIT-4 and GIT-5: detect an off-vocabulary label and a trailing period on a real repository, with sinceCommit and per-rule config', () => {
-    withTempGitRepo(
+  it('GIT-4 and GIT-5: detect an off-vocabulary label and a trailing period on a real repository, with sinceCommit and per-rule config', async () => {
+    await withTempGitRepo(
       MINIMAL_TREE,
-      (repoDir) => {
+      async (repoDir) => {
         const git = (...args: string[]) =>
           execFileSync('git', ['-C', repoDir, ...args], { encoding: 'utf8' });
         writeFileSync(path.join(repoDir, 'roadmap', 'extra.md'), '# x\n');
@@ -570,7 +571,7 @@ describe('the GIT rules and REF-3 on a temporary git repository', () => {
         git('add', '-A');
         git('commit', '-q', '-m', '[S0003] build: 終止符つき。');
 
-        const result = lintDir(repoDir);
+        const result = await lintDir(repoDir);
         const git4Diagnostics = result.diagnostics.filter(gitRules(['GIT-4']));
         const git5Diagnostics = result.diagnostics.filter(gitRules(['GIT-5']));
         expect(git4Diagnostics).toHaveLength(1);
@@ -579,49 +580,49 @@ describe('the GIT rules and REF-3 on a temporary git repository', () => {
         expect(git5Diagnostics[0]?.message).toContain('終止符つき。');
 
         // sinceCommit exempts the commit with the off-vocabulary label and everything before it (per rule — GIT-5 still reports)
-        const withSince = lintDir(repoDir, {
+        const withSince = await lintDir(repoDir, {
           rules: { 'GIT-4': { options: { sinceCommit: oldNameHash } } },
         });
         expect(withSince.diagnostics.filter(gitRules(['GIT-4']))).toEqual([]);
         expect(withSince.diagnostics.filter(gitRules(['GIT-5']))).toHaveLength(1);
 
         // Per-rule config (enabled / severity)
-        const disabled = lintDir(repoDir, {
+        const disabled = await lintDir(repoDir, {
           rules: { 'GIT-4': { enabled: false }, 'GIT-5': { enabled: false } },
         });
         expect(disabled.diagnostics.filter(gitRules(['GIT-4', 'GIT-5']))).toEqual([]);
-        const escalated = lintDir(repoDir, { rules: { 'GIT-5': { severity: 'error' } } });
+        const escalated = await lintDir(repoDir, { rules: { 'GIT-5': { severity: 'error' } } });
         expect(escalated.diagnostics.filter(gitRules(['GIT-5']))[0]?.severity).toBe('error');
       },
       '[S0001] init',
     );
   });
 
-  it('GIT-3: detects a tracked file that was ignored later', () => {
-    withTempGitRepo(
+  it('GIT-3: detects a tracked file that was ignored later', async () => {
+    await withTempGitRepo(
       { ...MINIMAL_TREE, 'gen.log': 'generated\n' },
-      (repoDir) => {
+      async (repoDir) => {
         const git = (...args: string[]) =>
           execFileSync('git', ['-C', repoDir, ...args], { encoding: 'utf8' });
         writeFileSync(path.join(repoDir, '.gitignore'), '*.log\n');
         git('add', '.gitignore');
         git('commit', '-q', '-m', '[S0002] ignore logs');
-        const result = lintDir(repoDir);
+        const result = await lintDir(repoDir);
         const git3Diagnostics = result.diagnostics.filter(gitRules(['GIT-3']));
         expect(git3Diagnostics).toHaveLength(1);
         expect(git3Diagnostics[0]?.anchor).toEqual({ kind: 'file', file: 'gen.log' });
 
         // Per-rule config
-        const disabled = lintDir(repoDir, { rules: { 'GIT-3': { enabled: false } } });
+        const disabled = await lintDir(repoDir, { rules: { 'GIT-3': { enabled: false } } });
         expect(disabled.diagnostics.filter(gitRules(['GIT-3']))).toEqual([]);
-        const softened = lintDir(repoDir, { rules: { 'GIT-3': { severity: 'warning' } } });
+        const softened = await lintDir(repoDir, { rules: { 'GIT-3': { severity: 'warning' } } });
         expect(softened.diagnostics.filter(gitRules(['GIT-3']))[0]?.severity).toBe('warning');
       },
       '[S0001] init',
     );
   });
 
-  it('REF-3(b): detects a reference inside roadmap/ that exists but is untracked', () => {
+  it('REF-3(b): detects a reference inside roadmap/ that exists but is untracked', async () => {
     const tree = {
       ...MINIMAL_TREE,
       'roadmap/research/R0001-x.md': [
@@ -648,12 +649,12 @@ describe('the GIT rules and REF-3 on a temporary git repository', () => {
         '',
       ].join('\n'),
     };
-    withTempGitRepo(
+    await withTempGitRepo(
       tree,
-      (repoDir) => {
+      async (repoDir) => {
         mkdirSync(path.join(repoDir, 'roadmap', 'assets', 'R0001'), { recursive: true });
         writeFileSync(path.join(repoDir, 'roadmap', 'assets', 'R0001', 'gen.py'), 'print(1)\n');
-        const result = lintDir(repoDir);
+        const result = await lintDir(repoDir);
         const found = result.diagnostics.filter(gitRules(['REF-3']));
         expect(found).toHaveLength(1);
         expect(found[0]?.message).toContain('roadmap/assets/R0001/gen.py');
@@ -662,12 +663,12 @@ describe('the GIT rules and REF-3 on a temporary git repository', () => {
     );
   });
 
-  it('skips the GIT rules outside a git repository and emits one notice', () => {
+  it('skips the GIT rules outside a git repository and emits one notice', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'roadmap-lint-nogit-'));
     try {
       mkdirSync(path.join(dir, 'roadmap'), { recursive: true });
       writeFileSync(path.join(dir, 'roadmap', 'status.md'), MINIMAL_TREE['roadmap/status.md']);
-      const result = lintDir(dir);
+      const result = await lintDir(dir);
       expect(result.diagnostics.filter(gitRules(['GIT-1', 'GIT-2', 'GIT-3']))).toEqual([]);
       expect(result.notices.filter((n) => n.includes('Skipped git-dependent checks'))).toHaveLength(1);
     } finally {
@@ -988,7 +989,7 @@ describe('GIT-7: Parking Lot and Deferred items not revisited within maxAgeDays'
     expect(runCorpus(git7, [rootStatus('null')], gitInfo()).out).toEqual([]);
   });
 
-  it('falls open to the default on an invalid maxAgeDays and emits a notice', () => {
+  it('falls open to the default on an invalid maxAgeDays and emits a notice', async () => {
     const file = roadmap(['- 案']);
     // 40 days old: past the default 30, but inside what a lenient reading of the invalid value would accept
     for (const bad of ['100', -1, Number.NaN]) {
@@ -999,7 +1000,7 @@ describe('GIT-7: Parking Lot and Deferred items not revisited within maxAgeDays'
     }
   });
 
-  it('on a real repository: dates an item by its last commit, resets on a rewrite, and takes per-rule config', () => {
+  it('on a real repository: dates an item by its last commit, resets on a rewrite, and takes per-rule config', async () => {
     const roadmapText = (item: string) =>
       [
         '---',
@@ -1025,9 +1026,9 @@ describe('GIT-7: Parking Lot and Deferred items not revisited within maxAgeDays'
         '- (none)',
         '',
       ].join('\n');
-    withTempGitRepo(
+    await withTempGitRepo(
       STATUS_TREE,
-      (repoDir) => {
+      async (repoDir) => {
         const git = (args: string[], date?: string) =>
           execFileSync('git', ['-C', repoDir, ...args], {
             encoding: 'utf8',
@@ -1038,14 +1039,14 @@ describe('GIT-7: Parking Lot and Deferred items not revisited within maxAgeDays'
         const roadmapPath = path.join(repoDir, 'roadmap', 'roadmap.md');
         writeFileSync(roadmapPath, roadmapText('- 古い案(復帰条件: x)'));
         // Untracked: skipped with a notice
-        const untracked = lintDir(repoDir, {}, { now: NOW });
+        const untracked = await lintDir(repoDir, {}, { now: NOW });
         expect(untracked.diagnostics.filter(ofRule(['GIT-7']))).toEqual([]);
         expect(untracked.notices.some((n) => n.startsWith('GIT-7'))).toBe(true);
 
         git(['add', '-A']);
         git(['commit', '-q', '-m', '[S0002] build: 案を追加'], '2026-07-01T00:00:00+00:00');
         const hash = git(['rev-parse', '--short=7', 'HEAD']).trim();
-        const aged = lintDir(repoDir, {}, { now: NOW });
+        const aged = await lintDir(repoDir, {}, { now: NOW });
         const found = aged.diagnostics.filter(ofRule(['GIT-7']));
         expect(found).toHaveLength(1);
         expect(found[0]?.severity).toBe('warning');
@@ -1060,22 +1061,22 @@ describe('GIT-7: Parking Lot and Deferred items not revisited within maxAgeDays'
 
         // Rewriting the line in the working tree = revisited now
         writeFileSync(roadmapPath, roadmapText('- 古い案(復帰条件を見直した: y)'));
-        expect(lintDir(repoDir, {}, { now: NOW }).diagnostics.filter(ofRule(['GIT-7']))).toEqual([]);
+        expect((await lintDir(repoDir, {}, { now: NOW })).diagnostics.filter(ofRule(['GIT-7']))).toEqual([]);
         // ... and once committed, the clock runs from that commit
         git(['add', '-A']);
         git(['commit', '-q', '-m', '[S0003] build: 案を見直し'], '2026-09-10T00:00:00+00:00');
-        expect(lintDir(repoDir, {}, { now: NOW }).diagnostics.filter(ofRule(['GIT-7']))).toEqual([]);
+        expect((await lintDir(repoDir, {}, { now: NOW })).diagnostics.filter(ofRule(['GIT-7']))).toEqual([]);
         const later = new Date('2026-11-01T00:00:00Z');
         expect(
-          lintDir(repoDir, {}, { now: later }).diagnostics.filter(ofRule(['GIT-7']))[0]?.message,
+          (await lintDir(repoDir, {}, { now: later })).diagnostics.filter(ofRule(['GIT-7']))[0]?.message,
         ).toContain('52 days');
 
         // Per-rule config: enabled / severity / options
-        const disabled = lintDir(repoDir, { rules: { 'GIT-7': { enabled: false } } }, { now: later });
+        const disabled = await lintDir(repoDir, { rules: { 'GIT-7': { enabled: false } } }, { now: later });
         expect(disabled.diagnostics.filter(ofRule(['GIT-7']))).toEqual([]);
-        const escalated = lintDir(repoDir, { rules: { 'GIT-7': { severity: 'error' } } }, { now: later });
+        const escalated = await lintDir(repoDir, { rules: { 'GIT-7': { severity: 'error' } } }, { now: later });
         expect(escalated.diagnostics.filter(ofRule(['GIT-7']))[0]?.severity).toBe('error');
-        const widened = lintDir(
+        const widened = await lintDir(
           repoDir,
           { rules: { 'GIT-7': { options: { maxAgeDays: 60 } } } },
           { now: later },

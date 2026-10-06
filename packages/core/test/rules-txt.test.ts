@@ -163,7 +163,7 @@ describe('TXT-1: garbled text and control characters (the deterministic check)',
 });
 
 describe('TXT-1: invalid UTF-8 bytes (generated at run time)', () => {
-  it('detects a file with broken bytes as U+FFFD', () => {
+  it('detects a file with broken bytes as U+FFFD', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'roadmap-lint-txt1-'));
     try {
       const fileDir = path.join(dir, 'roadmap', 'research');
@@ -176,7 +176,7 @@ describe('TXT-1: invalid UTF-8 bytes (generated at run time)', () => {
           Buffer.from('\n', 'utf8'),
         ]),
       );
-      const diagnostics = lintDir(dir).diagnostics.filter((d) => d.rule === 'TXT-1');
+      const diagnostics = (await lintDir(dir)).diagnostics.filter((d) => d.rule === 'TXT-1');
       expect(diagnostics).toHaveLength(1);
       expect(diagnostics[0]?.message).toContain('U+FFFD replacement character');
       expect(diagnostics[0]?.message).toContain('3 consecutive U+FFFD replacement characters');

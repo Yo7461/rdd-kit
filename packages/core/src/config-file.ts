@@ -1,6 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs';
-import path from 'node:path';
 import type { LintConfig, RuleConfig } from './config.js';
+import type { Host } from './host.js';
+import path from './path.js';
 
 /** The name of the config file found automatically (it sits next to roadmap/). */
 export const CONFIG_FILE_NAME = '.roadmap-lint.json';
@@ -13,9 +13,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** Returns the path of the config file in baseDir (the parent of roadmap/) when there is one. */
-export function discoverConfigFile(baseDir: string): string | null {
+export async function discoverConfigFile(baseDir: string, host: Host): Promise<string | null> {
   const candidate = path.join(baseDir, CONFIG_FILE_NAME);
-  return existsSync(candidate) ? candidate : null;
+  return (await host.exists(candidate)) ? candidate : null;
 }
 
 /**
@@ -23,10 +23,10 @@ export function discoverConfigFile(baseDir: string): string | null {
  * An unknown rule ID is allowed (forward compatibility — the config of a rule that is not implemented yet can be written ahead of it).
  * An unknown key or a wrong type is a ConfigError (catching a typo comes first).
  */
-export function loadConfigFile(filePath: string): LintConfig {
+export async function loadConfigFile(filePath: string, host: Host): Promise<LintConfig> {
   let raw: string;
   try {
-    raw = readFileSync(filePath, 'utf8');
+    raw = await host.readText(filePath);
   } catch {
     throw new ConfigError(`Cannot read the config file: ${filePath}.`);
   }

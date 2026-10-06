@@ -1,4 +1,4 @@
-import path from 'node:path';
+import path from '../path.js';
 import type { ParsedFile } from '../parse/parsed-file.js';
 import { frontMatterKeyRange, isRecord } from './helpers.js';
 import type { RuleDiagnostic, RuleModule } from './types.js';

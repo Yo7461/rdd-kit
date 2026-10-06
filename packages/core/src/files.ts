@@ -1,5 +1,5 @@
-import { existsSync, readdirSync, statSync } from 'node:fs';
-import path from 'node:path';
+import type { Host } from './host.js';
+import path from './path.js';
 
 /** The file type (8 types). Anything that cannot be identified is unknown (detecting a file outside the conventions belongs to FILE-1). */
 export type FileType =
@@ -19,12 +19,16 @@ export interface RoadmapTarget {
   roadmapDir: string;
 }
 
-/** Resolves the target: accepts either a directory that contains roadmap/ or roadmap/ itself. */
-export function resolveTarget(inputPath: string): RoadmapTarget | null {
+/**
+ * Resolves the target: accepts either a directory that contains roadmap/ or roadmap/ itself.
+ * The path is taken as given — a relative one stays relative to whatever the host reads it against,
+ * so a caller that wants an absolute target passes one (the CLI resolves its argument first).
+ */
+export async function resolveTarget(inputPath: string, host: Host): Promise<RoadmapTarget | null> {
   const abs = path.resolve(inputPath);
-  if (!existsSync(abs) || !statSync(abs).isDirectory()) return null;
+  if ((await host.stat(abs))?.kind !== 'dir') return null;
   const sub = path.join(abs, 'roadmap');
-  if (existsSync(sub) && statSync(sub).isDirectory()) {
+  if ((await host.stat(sub))?.kind === 'dir') {
     return { baseDir: abs, roadmapDir: sub };
   }
   if (path.basename(abs) === 'roadmap') {
@@ -34,7 +38,7 @@ export function resolveTarget(inputPath: string): RoadmapTarget | null {
 }
 
 export function toPosix(relPath: string): string {
-  return relPath.split(path.sep).join('/');
+  return relPath.replace(/\\/g, '/');
 }
 
 export interface RoadmapFileRef {
@@ -61,15 +65,22 @@ export function classifyFile(relPath: string): FileType {
 }
 
 /** Lists every regular file under roadmap/ in ascending relPath order (so the order does not depend on the environment). */
-export function collectFiles(target: RoadmapTarget): RoadmapFileRef[] {
-  const entries = readdirSync(target.roadmapDir, { recursive: true, withFileTypes: true });
+export async function collectFiles(target: RoadmapTarget, host: Host): Promise<RoadmapFileRef[]> {
   const files: RoadmapFileRef[] = [];
-  for (const entry of entries) {
-    if (!entry.isFile()) continue;
-    const absPath = path.join(entry.parentPath, entry.name);
-    const relPath = toPosix(path.relative(target.baseDir, absPath));
-    files.push({ absPath, relPath, type: classifyFile(relPath) });
-  }
+  // Directories are listed side by side. A symbolic link (`other`) is neither followed nor counted
+  const walk = async (dir: string): Promise<void> => {
+    const entries = await host.listDir(dir);
+    await Promise.all(
+      entries.map(async (entry) => {
+        const absPath = path.join(dir, entry.name);
+        if (entry.kind === 'dir') return walk(absPath);
+        if (entry.kind !== 'file') return;
+        const relPath = toPosix(path.relative(target.baseDir, absPath));
+        files.push({ absPath, relPath, type: classifyFile(relPath) });
+      }),
+    );
+  };
+  await walk(target.roadmapDir);
   files.sort((a, b) => (a.relPath < b.relPath ? -1 : a.relPath > b.relPath ? 1 : 0));
   return files;
 }

@@ -5,6 +5,9 @@ import path from 'node:path';
 import type { LintConfig } from '../config.js';
 import { runLint, type LintOptions, type LintResult } from '../engine.js';
 import { resolveTarget } from '../files.js';
+import { nodeHost } from './node-host.js';
+
+export { nodeHost } from './node-host.js';
 
 /** One case under fixtures/violations/<rule ID>/ (the overlay approach — a minimal mutation of the valid corpus). */
 export interface ViolationCase {
@@ -70,10 +73,10 @@ export function materializeCase(
   return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true, maxRetries: 3 }) };
 }
 
-export function lintDir(dir: string, config: LintConfig = {}, options: LintOptions = {}): LintResult {
-  const target = resolveTarget(dir);
+export async function lintDir(dir: string, config: LintConfig = {}, options: LintOptions = {}): Promise<LintResult> {
+  const target = await resolveTarget(dir, nodeHost);
   if (!target) throw new Error(`Cannot find roadmap/ under ${dir}.`);
-  return runLint(target, config, options);
+  return runLint(target, nodeHost, config, options);
 }
 
 export function readExpectedDiagnostics(expectedPath: string): unknown {
@@ -89,11 +92,11 @@ export function diagnosticsToJsonValue(result: LintResult): unknown {
  * Assembles a temporary git repository and hands it to fn (for the GIT rules).
  * The keys of tree are repository-relative paths (POSIX) and the values are file contents. Every file goes into one commit.
  */
-export function withTempGitRepo<T>(
+export async function withTempGitRepo<T>(
   tree: Record<string, string>,
-  fn: (repoDir: string) => T,
+  fn: (repoDir: string) => T | Promise<T>,
   commitMessage = 'fixture',
-): T {
+): Promise<T> {
   const repoDir = mkdtempSync(path.join(tmpdir(), 'roadmap-lint-git-'));
   try {
     const git = (...args: string[]): string =>
@@ -111,7 +114,7 @@ export function withTempGitRepo<T>(
     }
     git('add', '-A');
     git('commit', '-q', '--allow-empty', '-m', commitMessage);
-    return fn(repoDir);
+    return await fn(repoDir);
   } finally {
     rmSync(repoDir, { recursive: true, force: true, maxRetries: 3 });
   }

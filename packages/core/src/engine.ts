@@ -1,11 +1,11 @@
-import { existsSync } from 'node:fs';
-import path from 'node:path';
 import { resolveRuleConfig, type LintConfig } from './config.js';
 import { collectGitInfo } from './corpus/git.js';
-import { buildCorpusIndex } from './corpus/index.js';
+import { buildCorpusIndex, type CorpusIndex } from './corpus/index.js';
 import type { Diagnostic } from './diagnostic.js';
 import { collectFiles, resolveTarget, type RoadmapTarget } from './files.js';
+import type { Host } from './host.js';
 import { parseRoadmapFile } from './parse/parsed-file.js';
+import path from './path.js';
 import { allRules } from './rules/registry.js';
 import type { RuleDiagnostic } from './rules/types.js';
 import { sortDiagnostics } from './report/sort.js';
@@ -24,21 +24,69 @@ export interface LintOptions {
   now?: Date;
 }
 
-export function runLint(
+export async function runLint(
   target: RoadmapTarget,
+  host: Host,
   config: LintConfig = {},
   options: LintOptions = {},
-): LintResult {
+): Promise<LintResult> {
   const now = options.now ?? new Date();
-  const refs = collectFiles(target);
-  const files = refs.filter((ref) => ref.relPath.endsWith('.md')).map(parseRoadmapFile);
-  const git = collectGitInfo(target.baseDir);
+  const refs = await collectFiles(target, host);
+  const files = await Promise.all(
+    refs.filter((ref) => ref.relPath.endsWith('.md')).map((ref) => parseRoadmapFile(ref, host)),
+  );
+  const git = await collectGitInfo(target.baseDir, host);
+
+  // The rules ask `pathExists` and `lineHistory` synchronously, and the host answers asynchronously. So a
+  // first pass of the corpus rules only records what they ask — every path reads as missing and every
+  // history as absent, the answers that make REF-2, REF-3, and GIT-7 ask the most — then the answers are
+  // read from the host in one go, and the real pass below reads them from memory. A question the first
+  // pass did not record throws, so a rule whose questions depend on the answers fails loudly instead of
+  // being answered wrongly
+  const existing = new Map<string, boolean>();
   const corpus = buildCorpusIndex(
     refs.map((ref) => ({ relPath: ref.relPath, type: ref.type })),
     files,
-    (relPath) => existsSync(path.join(target.baseDir, relPath)),
+    (relPath) => {
+      const known = existing.get(relPath);
+      if (known === undefined) {
+        throw new Error(`pathExists was asked for ${relPath}, which the recording pass did not record.`);
+      }
+      return known;
+    },
     git,
   );
+  const askedPaths = new Set<string>();
+  const askedHistories = new Set<string>();
+  const recording: CorpusIndex = {
+    ...corpus,
+    pathExists: (relPath) => {
+      askedPaths.add(relPath);
+      return false;
+    },
+    git:
+      git &&
+      ({
+        ...git,
+        lineHistory: (relPath) => {
+          askedHistories.add(relPath);
+          return null;
+        },
+      } satisfies typeof git),
+  };
+  for (const rule of allRules) {
+    const resolved = resolveRuleConfig(rule, config, () => {});
+    if (!rule.checkCorpus || !resolved.enabled) continue;
+    const ruleOptions = rule.validateOptions ? rule.validateOptions(resolved.options, () => {}) : resolved.options;
+    rule.checkCorpus({ files, corpus: recording, options: ruleOptions, notice: () => {}, now });
+  }
+  await Promise.all(
+    [...askedPaths].map(async (relPath) => {
+      existing.set(relPath, await host.exists(path.join(target.baseDir, relPath)));
+    }),
+  );
+  await git?.loadLineHistory([...askedHistories]);
+
   const notices: string[] = [];
   if (git === null) {
     notices.push(
@@ -84,12 +132,13 @@ export function runLint(
 }
 
 /** Runs against a given path. Throws when roadmap/ cannot be found (the CLI turns it into exit 2). */
-export function lintPath(
+export async function lintPath(
   inputPath: string,
+  host: Host,
   config: LintConfig = {},
   options: LintOptions = {},
-): LintResult {
-  const target = resolveTarget(inputPath);
+): Promise<LintResult> {
+  const target = await resolveTarget(inputPath, host);
   if (!target) throw new Error(`Cannot find roadmap/ under ${inputPath}.`);
-  return runLint(target, config, options);
+  return runLint(target, host, config, options);
 }

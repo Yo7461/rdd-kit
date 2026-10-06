@@ -1,4 +1,4 @@
-import path from 'node:path';
+import path from '../path.js';
 import { layerOf } from '../corpus/index.js';
 import { parseFrontMatterValue } from '../parse/frontmatter.js';
 import { findH2Section } from '../parse/sections.js';

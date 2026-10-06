@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
 import { classifyFile, type FileType, type RoadmapFileRef } from '../files.js';
+import type { Host } from '../host.js';
 import { parseMarkdown, type MarkdownIndex } from './markdown.js';
 import { normalizeText, splitLines } from './source.js';
 
@@ -29,6 +29,6 @@ export function parseSource(relPath: string, rawText: string): ParsedFile {
   };
 }
 
-export function parseRoadmapFile(ref: RoadmapFileRef): ParsedFile {
-  return parseSource(ref.relPath, readFileSync(ref.absPath, 'utf8'));
+export async function parseRoadmapFile(ref: RoadmapFileRef, host: Host): Promise<ParsedFile> {
+  return parseSource(ref.relPath, await host.readText(ref.absPath));
 }

@@ -471,7 +471,7 @@ for (const c of cases) {
   // Regenerate the golden (compose valid plus the overlay -> lint -> serialize to JSON)
   const { dir, cleanup } = materializeCase(validRoot, c.overlayDir);
   try {
-    const diagnostics = diagnosticsToJsonValue(lintDir(dir));
+    const diagnostics = diagnosticsToJsonValue(await lintDir(dir));
     if (!Array.isArray(diagnostics) || diagnostics.length === 0) {
       problems.push(`violations/${c.ruleId}: no diagnostics for a violation case (the overlay is broken)`);
       continue;
@@ -528,7 +528,7 @@ for (const variant of VARIANTS) {
   // A variant is only meaningful while it stays clean (the same assertion the fixture test makes)
   const { dir, cleanup } = materializeCase(validRoot, overlayDir);
   try {
-    const diagnostics = lintDir(dir).diagnostics;
+    const diagnostics = (await lintDir(dir)).diagnostics;
     if (diagnostics.length > 0) {
       problems.push(
         `valid-variants/${variant.name}: expected zero diagnostics, got ${diagnostics.length} (${diagnostics

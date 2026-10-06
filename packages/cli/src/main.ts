@@ -15,6 +15,7 @@ import {
   type LintConfig,
   type Severity,
 } from '@rdd-kit/core';
+import { nodeHost } from './host.js';
 
 const USAGE = `Usage: roadmap-lint [path] [options]
 
@@ -65,7 +66,7 @@ function dropParserDebugVariables(): void {
   delete process.env['LOG_STREAM'];
 }
 
-function main(): number {
+async function main(): Promise<number> {
   dropParserDebugVariables();
   let parsed: ReturnType<typeof parseArgs<{
     options: {
@@ -117,7 +118,8 @@ function main(): number {
   }
 
   const inputPath = positionals[0] ?? '.';
-  const target = resolveTarget(inputPath);
+  // The core knows no working directory of its own, so the argument is made absolute here
+  const target = await resolveTarget(path.resolve(inputPath), nodeHost);
   if (target === null) {
     process.stderr.write(`Cannot find roadmap/ under ${inputPath}.\n`);
     return 2;
@@ -125,13 +127,13 @@ function main(): number {
 
   let config: LintConfig = {};
   if (values.config !== undefined) {
-    config = loadConfigFile(path.resolve(values.config));
+    config = await loadConfigFile(path.resolve(values.config), nodeHost);
   } else {
-    const discovered = discoverConfigFile(target.baseDir);
-    if (discovered !== null) config = loadConfigFile(discovered);
+    const discovered = await discoverConfigFile(target.baseDir, nodeHost);
+    if (discovered !== null) config = await loadConfigFile(discovered, nodeHost);
   }
 
-  const result = runLint(target, config);
+  const result = await runLint(target, nodeHost, config);
   process.stdout.write(format === 'json' ? formatJson(result) : formatText(result));
 
   const threshold = severityRank(failSeverity as Severity);
@@ -139,16 +141,21 @@ function main(): number {
   return failing ? 1 : 0;
 }
 
-try {
-  process.exitCode = main();
-} catch (error) {
-  if (error instanceof UsageError) {
-    process.stderr.write(`${error.message}\n\n${USAGE}`);
-  } else if (error instanceof ConfigError) {
-    process.stderr.write(`Configuration error: ${error.message}\n`);
-  } else {
-    const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`Execution error: ${message}\n`);
-  }
-  process.exitCode = 2;
-}
+// A promise chain rather than a top-level await: the bundle is CJS (scripts/build-plugin.mjs), where
+// a top-level await has no place
+main().then(
+  (code) => {
+    process.exitCode = code;
+  },
+  (error: unknown) => {
+    if (error instanceof UsageError) {
+      process.stderr.write(`${error.message}\n\n${USAGE}`);
+    } else if (error instanceof ConfigError) {
+      process.stderr.write(`Configuration error: ${error.message}\n`);
+    } else {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write(`Execution error: ${message}\n`);
+    }
+    process.exitCode = 2;
+  },
+);
