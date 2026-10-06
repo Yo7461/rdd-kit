@@ -442,15 +442,17 @@ describe('the manifests', () => {
         found.push(`${document}: marketplace`);
         expect(`${document}: ${value}`).toBe(`${document}: ${marketplaceName}`);
       }
-      // The installed copy: cache/<marketplace>/<plugin>/<version>/
-      for (const match of text.matchAll(/plugins\/cache\/([\w-]+)\/([\w-]+)\//gu)) {
+      // The installed copy: cache/<marketplace>/, or cache/<marketplace>/<plugin>/<version>/
+      // A name is words joined by dots, so a name with a dot in it is read whole, not up to the dot
+      for (const match of text.matchAll(/plugins\/cache\/([\w-]+(?:\.[\w-]+)*)(?:\/([\w-]+(?:\.[\w-]+)*))?/gu)) {
         found.push(`${document}: cache`);
-        expect(`${document}: ${match[1] as string}/${match[2] as string}`).toBe(
-          `${document}: ${marketplaceName}/${pluginName}`,
-        );
+        const named = match[2] === undefined ? (match[1] as string) : `${match[1] as string}/${match[2]}`;
+        const expected = match[2] === undefined ? marketplaceName : `${marketplaceName}/${pluginName}`;
+        expect(`${document}: ${named}`).toBe(`${document}: ${expected}`);
       }
     }
     expect(found.sort()).toEqual([
+      'README.md: cache',
       'README.md: id',
       'README.md: id',
       'README.md: id',
@@ -466,5 +468,13 @@ describe('the manifests', () => {
     for (const document of ['README.md', 'plugin/README.md']) {
       expect(read(document).split('\n')[2]).toBe(plugin['description']);
     }
+  });
+
+  // A release adds its line at the top of the upgrade notes; a version raised without one fails here
+  it('carry the version that heads the upgrade notes', () => {
+    const section = read('doc/roadmap-lint.md').split('\n## Upgrade notes\n')[1] ?? '';
+    const first = section.split('\n').find((line) => line.startsWith('- '));
+    const head = `- **${plugin['version'] as string}** — `;
+    expect((first ?? '').slice(0, head.length)).toBe(head);
   });
 });

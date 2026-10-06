@@ -72,7 +72,7 @@ Inside a Claude Code session one command covers both steps (Claude Code v2.1.275
 
 - Without `--scope` the install is user-wide (every project). To limit it to one project, run it in that project's directory with `--scope project` (shared with the team) or `--scope local` (personal)
 - What it installs: the `/roadmap` skill, a hook that lints right after an edit under `roadmap/`, and the bundled roadmap-lint. What the plugin runs on the machine is listed in [plugin/README.md](plugin/README.md)
-- Updating: `claude plugin update rdd-kit@rdd-kit`. Automatic updates are off for this marketplace until they are turned on under `/plugin` → Marketplaces
+- Updating: `claude plugin update rdd-kit@rdd-kit`. Automatic updates are off for this marketplace until they are turned on under `/plugin` → Marketplaces. What changed in each version is listed under [Upgrade notes](doc/roadmap-lint.md#upgrade-notes)
 
 ## Quick start
 
@@ -88,14 +88,14 @@ claude plugin uninstall rdd-kit@rdd-kit
 claude plugin marketplace remove rdd-kit
 ```
 
-Pass `uninstall` the same `--scope` the install used. Removing the marketplace also uninstalls the plugin and deletes its cached files, so the second command alone removes the plugin. After an uninstall on its own, the cached copy is cleaned up in the background 14 days later, as long as another plugin is installed. What is in each project — `roadmap/`, the section in `CLAUDE.md`, the lines added to `.gitignore`, a `.roadmap-lint.json` — stays as it is.
+Pass `uninstall` the same `--scope` the install used. Removing the marketplace also uninstalls the plugin, so the second command alone removes the plugin. The installed copy under `~/.claude/plugins/cache/rdd-kit/` — one folder for each version installed — can stay behind after either command. According to Claude Code's documentation, a copy left by `claude plugin uninstall` on its own, with the marketplace kept, is cleaned up in the background 14 days later, as long as another plugin is installed. Once the plugin is uninstalled in every scope it was installed in, the folder can be deleted by hand. What is in each project — `roadmap/`, the section in `CLAUDE.md`, the lines added to `.gitignore`, a `.roadmap-lint.json` — stays as it is.
 
 ## Documentation
 
 | Document | Contents |
 |---|---|
 | [doc/concepts.md](doc/concepts.md) | Roadmap-driven development in full — the layers, phases, sessions, IDs, the spec, when the person is asked, and the language the records are written in |
-| [doc/roadmap-lint.md](doc/roadmap-lint.md) | The linter — invocation, output, configuration, the rules, and how to respond to diagnostics |
+| [doc/roadmap-lint.md](doc/roadmap-lint.md) | The linter — invocation, output, configuration, the rules, and how to respond to diagnostics. Also the upgrade notes: what changed in each version |
 | [doc/development.md](doc/development.md) | Working on rdd-kit itself — repository layout, tests, fixtures, and releases |
 | [plugin/README.md](plugin/README.md) | What is distributed, what the plugin runs, and how the hook is set up |
 

@@ -12,6 +12,7 @@ roadmap-lint checks the structure of the records under `roadmap/`: front matter,
 - [Diagnostics that depend on the moment](#diagnostics-that-depend-on-the-moment)
 - [How to respond to diagnostics](#how-to-respond-to-diagnostics)
 - [Using the linter without the plugin](#using-the-linter-without-the-plugin)
+- [Upgrade notes](#upgrade-notes)
 
 ## Running it
 
@@ -212,3 +213,9 @@ npm install --offline --no-audit --no-fund <dir>/roadmap-lint-<version>.tgz
 ```
 
 The last command runs in the target project and installs the CLI there, where `npx roadmap-lint` and the npm scripts of that project find it. With `-g` it installs for every project and puts `roadmap-lint` on the PATH. The tarball carries the license files and the copyright notice as well: `LICENSE`, `THIRD-PARTY-LICENSES.txt`, and `NOTICE`.
+
+## Upgrade notes
+
+What changed in each version, newest first. 0.1.0 was the first release and has no entry.
+
+- **0.1.1** — corrects the README on uninstalling: removing the marketplace was said to delete the plugin's installed copy, but the copy can stay behind after either `claude plugin uninstall` or `claude plugin marketplace remove`; the README now says when it can be deleted by hand. The skill, the linter, the hook, and the record formats are the same as in 0.1.0
