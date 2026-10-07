@@ -8,6 +8,9 @@
   "homepage": "https://github.com/Yo7461/rdd-kit",
   "repository": "https://github.com/Yo7461/rdd-kit",
   "license": "Apache-2.0",
+  "documentationUrl": "https://github.com/Yo7461/rdd-kit#readme",
+  "supportUrl": "https://github.com/Yo7461/rdd-kit/issues",
+  "privacyPolicyUrl": "https://github.com/Yo7461/rdd-kit/blob/main/plugin/README.md#privacy",
   "keywords": [
     "roadmap-driven-development",
     "rdd",

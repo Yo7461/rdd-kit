@@ -2,7 +2,7 @@
 
 The /roadmap skill for roadmap-driven development, plus roadmap-lint — a linter that makes its records tool-verifiable.
 
-This directory is what gets distributed. It follows the Claude Code plugin layout and holds the skill, a hooks module that lints right after an edit and serves the records check as a tool, and readable copies of the lint core and of the third-party packages it uses. Claude Code runs the module inside its own process, so the plugin needs no Node.js. An installed copy holds this directory alone: the links below that lead to `../README.md` and `../doc/` point into the repository, whose address is the `repository` of `.claude-plugin/plugin.json`.
+This folder is the plugin: the `/roadmap` skill, a hooks module that lints the records right after an edit and serves the records check as a tool, and readable copies of the lint core and of the third-party packages it uses. Claude Code runs the module inside its own process, so the plugin needs no Node.js, installs nothing, and sends nothing off the machine. An installed copy holds this folder alone: the links below that lead to `../README.md` and `../doc/` point into the repository, whose address is the `repository` of `.claude-plugin/plugin.json`.
 
 ## Roadmap-driven development
 
@@ -32,6 +32,14 @@ claude plugin install rdd-kit@rdd-kit
 ```
 
 It needs Claude Code **2.1.286 or later** in the desktop app, or **2.1.287 or later** in the terminal — the versions from which a plugin's hooks module loads by default. Hooks modules are an early-access part of Claude Code, and their interface can change between versions: each release of rdd-kit names the version it was run on (this one: 2.1.289, in the terminal on Windows; other surfaces were not tried), and a lint that stops working never blocks an edit (below). On an older Claude Code the skill still works, but the lint after an edit and the records-check tool are absent (not tried). Node.js is not needed; only the CLI — roadmap-lint by hand or in CI — needs Node.js >= 24. Scopes, updating, and uninstalling are in the [README](../README.md) of the repository.
+
+Once the plugin is listed in Anthropic's directory, it can also be added from **Customize > Plugins** on claude.ai — it then reaches Claude Code as a synced plugin at the next session start — or with `/plugin directory` in Claude Code 2.1.287 or later. A copy installed from the command line stays on that machine and is not added to the account; the two routes do not update each other.
+
+## Three things to try
+
+1. **Plan a project** — in a project with nothing under `roadmap/`, run `/roadmap init`. Claude interviews you about what you are building, prints the whole course as phases with a goal and a reason each, asks once whether to start with it, and generates `roadmap/` (and a section in the project's `CLAUDE.md`). The report that ends the command tells you what was made and recommends `/roadmap start`
+2. **Work a session, and see the lint** — run `/roadmap start`. Claude prints what this session is going for and proceeds. When an edit under `roadmap/` leaves the records inconsistent — a session file without its row in the phase status, say — a dim line such as `roadmap-lint: 1 problem (1 error, 0 warnings) after editing roadmap/.` appears under that edit, the same report joins the result Claude reads, and Claude fixes the record before going on. An edit that leaves nothing to report shows nothing
+3. **Check the records on demand** — run `/roadmap doctor`. Claude calls the tool `mcp__rdd-kit__roadmap_lint`, which runs the 35 rules over `roadmap/` and returns the report, and then reads the records for what the rules cannot see: whether the contracts still describe the code, and whether a conclusion still matches its measurement. Nothing is changed; the report says what needs action and what to do
 
 ## What the plugin runs
 
@@ -99,6 +107,29 @@ Add the following to the project's `.claude/settings.json`, with the path pointi
   }
 }
 ```
+
+## Troubleshooting
+
+- **No line appears after an edit under `roadmap/`** — first, that is what a clean edit looks like: the module reports only when there are diagnostics. Then check, in order: `/plugin` shows the plugin enabled and a dim line such as `1 mod active · rdd-kit` under the tabs (a hooks module loads by default from Claude Code 2.1.286 in the desktop app and 2.1.287 in the terminal — `claude --version` in the terminal, `/status` in the desktop app); `disableAllHooks` is not set in your settings and the session was not started with `--safe-mode` or `--bare`, which stop every installed mod; the session is not a WSL session of the desktop app, where plugins do not load; and the edited file is under the `roadmap/` of the project the session started in — a `cd` in the shell does not move the project, `/cd` does
+- **A dim line says the lint failed or ran out of time** — the edit went through unchanged; the next edit tries again. A repository with a very long history (tens of thousands of commits) is more than Claude Code hands the module, so the check falls back to the CLI there: see [doc/roadmap-lint.md](../doc/roadmap-lint.md#using-the-linter-without-the-plugin)
+- **`mcp__rdd-kit__roadmap_lint` is not in the tool list** — the plugin is not enabled, or Claude Code is older than the versions above. The skill then runs the records check through the CLI when one is installed, and otherwise says so
+- **`/roadmap` is not found** — the full name is `/rdd-kit:roadmap`; the short form is taken when another command already uses it
+- **Turning it off** — disable or uninstall the plugin from the **Installed** tab of `/plugin`; the skill, the lint after an edit, and the tool go together. Uninstalling is described in the repository's [README](../README.md#uninstalling)
+
+## Support
+
+Questions, problems, and security concerns go to the Issues page of the repository named in `repository` of `.claude-plugin/plugin.json` (the directory listing links to it as well). Say which Claude Code version you run and whether `/plugin` lists the mod as active.
+
+## Privacy
+
+The plugin collects no data and sends nothing off the machine. This section is its privacy policy.
+
+- **What it reads**: the files under the project's `roadmap/`, the `.roadmap-lint.json` beside it, whether the paths the records refer to exist, and the project's git metadata through `git`, read-only (the commands are listed under [What the plugin runs](#what-the-plugin-runs)). With a user-wide install this happens in every project that has a `roadmap/` directory
+- **What it stores**: nothing. It writes no file, no setting, and no log, and keeps no usage data
+- **What it sends**: nothing. The module makes no network connection and the plugin declares no connector. The lint report is appended to the result of the edit it checked, so it enters the conversation like any other tool result and is sent to the model as part of the session, as everything in a Claude Code session is
+- **The skill**: a set of instructions for Claude. Following them, Claude reads and edits the records under `roadmap/`, works on the project's code, and makes git commits — through Claude Code's own tools and under its permission settings. A research phase reads outside sources through Claude Code's web tools, as any session can
+
+Questions about this policy go through [Support](#support).
 
 ## License
 

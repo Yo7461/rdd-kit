@@ -74,6 +74,8 @@ Inside a Claude Code session one command covers both steps. It asks before addin
 - What it installs: the `/roadmap` skill and a hooks module that lints right after an edit under `roadmap/` and serves the records check as a tool, with the lint core as readable source. What the plugin runs, what it reads, and what it never does are listed in [plugin/README.md](plugin/README.md)
 - Updating: `claude plugin update rdd-kit@rdd-kit`. Automatic updates are off for this marketplace until they are turned on under `/plugin` → Marketplaces. What changed in each version is listed under [Upgrade notes](doc/roadmap-lint.md#upgrade-notes)
 
+Once the plugin is listed in Anthropic's directory, it can also be added from **Customize > Plugins** on claude.ai — it then reaches Claude Code as a synced plugin at the next session start — or with `/plugin directory` in Claude Code 2.1.287 or later. A copy installed from the command line stays on that machine and is not added to the account; the two routes do not update each other.
+
 ## Quick start
 
 1. Open Claude Code in the target project and run `/roadmap init` — an interview, then an outline of the whole course, then the generated `roadmap/`. `init` also appends a section to the project's `CLAUDE.md` and, under git, creates or extends its `.gitignore`. `/roadmap` is the short form of the skill's full name, `/rdd-kit:roadmap`, and it is available unless another command already uses that name. `/plugin` shows whether the plugin is enabled
@@ -97,7 +99,7 @@ Pass `uninstall` the same `--scope` the install used. Removing the marketplace a
 | [doc/concepts.md](doc/concepts.md) | Roadmap-driven development in full — the layers, phases, sessions, IDs, the spec, when the person is asked, and the language the records are written in |
 | [doc/roadmap-lint.md](doc/roadmap-lint.md) | The linter — invocation, output, configuration, the rules, and how to respond to diagnostics. Also the upgrade notes: what changed in each version |
 | [doc/development.md](doc/development.md) | Working on rdd-kit itself — repository layout, tests, fixtures, and releases |
-| [plugin/README.md](plugin/README.md) | What is distributed, what the plugin runs and reads, and the lint without the plugin |
+| [plugin/README.md](plugin/README.md) | What is distributed, what the plugin runs and reads, three things to try, troubleshooting, support, the privacy policy, and the lint without the plugin |
 
 ## License
 

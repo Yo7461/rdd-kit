@@ -188,7 +188,7 @@ describe('the rule count', () => {
   // here until it is pinned again — which is the moment to check that the new wording is still seen.
   const MENTIONS: Record<string, number> = {
     'README.md': 2,
-    'plugin/README.md': 1,
+    'plugin/README.md': 2,
     'doc/development.md': 1,
     'doc/roadmap-lint.md': 1,
     'plugin/skills/roadmap/SKILL.md': 1,
