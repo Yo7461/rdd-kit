@@ -409,6 +409,12 @@ describe('the manifests', () => {
     expect(entry['name']).toBe(pluginName);
   });
 
+  // Without a display name the directory titles the listing from the name, written as words
+  // ("Rdd Kit"); the listing should carry the name every document uses
+  it('give the directory listing the plugin name as its display name', () => {
+    expect(plugin['displayName']).toBe(pluginName);
+  });
+
   // The directory reads these three from plugin.json; `claude plugin validate` accepts any value in them
   it('point the listing fields at the repository, and the privacy policy at a heading of the plugin README', () => {
     const homepage = plugin['homepage'] as string;
