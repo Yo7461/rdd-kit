@@ -18138,7 +18138,7 @@ Exit codes:
 var UsageError = class extends Error {
 };
 function cliVersion() {
-  if (true) return "0.2.0";
+  if (true) return "0.2.1";
   const packageJson = JSON.parse(
     (0, import_node_fs.readFileSync)(new URL("../package.json", import_meta.url), "utf8")
   );

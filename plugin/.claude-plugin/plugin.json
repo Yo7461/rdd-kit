@@ -1,7 +1,7 @@
 {
   "name": "rdd-kit",
   "description": "The /roadmap skill for roadmap-driven development, plus roadmap-lint — a linter that makes its records tool-verifiable.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": {
     "name": "Yo7461"
   },
