@@ -4,7 +4,7 @@ import { access, readdir, readFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import type { EngineInterface, FsEntry, FsStat, On, ProcessRunInit, ProcessRunResult, Register, SessionAppendInput, TimerCall, ToolCallResult, ToolSpec } from 'claude-code';
+import type { EngineInterface, FileToolName, FsEntry, FsStat, On, ProcessRunInit, ProcessRunResult, Register, SessionAppendInput, TimerCall, ToolCallResult, ToolSpec } from 'claude-code';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { listViolationCases, materializeCase, withTempGitRepo } from '../../core/src/testing/index.js';
 
@@ -140,11 +140,12 @@ const atOnce: TimerCall = (_ms, fn) => {
 };
 
 const editOf = (dir: string, file: string, id: string) => ({ tool: 'Edit' as const, tool_use_id: id, file_path: path.join(dir, file), old_string: 'a', new_string: 'b' });
+const writeOf = (dir: string, file: string, id: string) => ({ tool: 'Write' as const, tool_use_id: id, file_path: path.join(dir, file), content: 'b' });
 const editResult = (): ToolCallResult => ({ result: { filePath: 'x' }, text: 'The file has been updated successfully.', ref: 1 });
 
 /** One `session.append` of a tool-result row, as the engine raises it after the call: `content` is the row's blocks. */
-function appendOf(blocks: SessionAppendInput['message']['content']): SessionAppendInput {
-  return { message: { type: 'user', role: 'user', content: blocks }, door: 'tool-result', origin: { kind: 'tool', tool: 'Edit' }, uuid: 'row-1' };
+function appendOf(blocks: SessionAppendInput['message']['content'], tool: FileToolName = 'Edit'): SessionAppendInput {
+  return { message: { type: 'user', role: 'user', content: blocks }, door: 'tool-result', origin: { kind: 'tool', tool }, uuid: 'row-1' };
 }
 
 async function runEdit(dir: string, file: string, $: EngineInterface, id: string, next: () => Promise<ToolCallResult> = async () => editResult()) {
@@ -157,9 +158,9 @@ async function runEdit(dir: string, file: string, $: EngineInterface, id: string
  * What the module did with a row: the blocks it passed to `next` (null when it passed the row as it came),
  * and whether it relayed `next`'s answer unchanged — the engine skips a hook that answers anything else.
  */
-async function runAppend($: EngineInterface, blocks: SessionAppendInput['message']['content']) {
+async function runAppend($: EngineInterface, blocks: SessionAppendInput['message']['content'], tool: FileToolName = 'Edit') {
   let seen: SessionAppendInput | null = null;
-  const e = appendOf(blocks);
+  const e = appendOf(blocks, tool);
   const stored = { message: e.message, uuid: e.uuid };
   const answered = await hookFor('session.append', { door: 'tool-result' })($, e, async (passed: SessionAppendInput) => {
     seen = passed;
@@ -304,6 +305,21 @@ describe('the check after an Edit or Write under roadmap/', () => {
         expect(commandHookReport(dir), `config ${index}`).toBe(logged[0]);
         expect(await runAppend($, [{ type: 'tool_result', tool_use_id: id, content: 'ok' }])).not.toBeNull();
       }
+    }));
+
+  it('M1c: a Write under roadmap/ is checked like an Edit — its input has a content and no strings — and the report joins the row of a Write result', () =>
+    withSizeViolation(async (dir) => {
+      const { $, logged } = engineAt(dir);
+      const expected = editResult();
+      const answered = await hookFor('tool.call', { tool: ['Edit', 'Write'] })($, writeOf(dir, path.join('roadmap', 'status.md'), 'toolu_w1'), async () => expected);
+      expect(answered).toBe(expected);
+      expect(logged).toHaveLength(1);
+      const report = logged[0] as string;
+      expect(report.split('\n')[0]).toBe('roadmap-lint: 1 problem (1 error, 0 warnings) after editing roadmap/.');
+      expect(bodyOf(await runAppend($, [{ type: 'tool_result', tool_use_id: 'toolu_w1', content: 'File created successfully.' }], 'Write'))).toBe(
+        `File created successfully.\n\n${report}`,
+      );
+      expect(await runAppend($, [{ type: 'tool_result', tool_use_id: 'toolu_w1', content: 'again' }], 'Write')).toBeNull();
     }));
 
   it('M2: with no diagnostics — nothing is logged, and the row is left alone', () =>
