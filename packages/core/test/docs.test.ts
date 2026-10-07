@@ -318,6 +318,19 @@ describe('the links in the documentation', () => {
           expect(indexOf(rel).anchors.has(anchor), hint).toBe(true);
         }
       }
+
+      // A link into this repository by its GitHub address — the plugin's README links to the repository's
+      // README and doc/ this way, so that an installed copy, which holds the plugin folder alone, has no
+      // dangling link and names nothing outside its folder: the file and the anchor have to exist here as well
+      const prefix = `${readJson('plugin/.claude-plugin/plugin.json')['homepage'] as string}/blob/main/`;
+      for (const link of links.filter((value) => value.startsWith(prefix))) {
+        const hint = `${document} links to ${link}`;
+        const [target = '', anchor] = decoded(link.slice(prefix.length)).split('#');
+        const rel = path.posix.normalize(target);
+        expect(existsExactly(rel), hint).toBe(true);
+        expect(isDevelopmentOnly(rel), `${hint}, which the repository does not publish`).toBe(false);
+        if (anchor !== undefined && rel.endsWith('.md')) expect(indexOf(rel).anchors.has(anchor), hint).toBe(true);
+      }
     });
 
     it(`${document}: no table cell leaves a code span open`, () => {
@@ -434,9 +447,17 @@ describe('the manifests', () => {
         expect(`${document}: ${named}`).toBe(`${document}: ${repository}`);
       }
     }
-    // Two commands in the README and one in the plugin's. A different list means a command was
-    // added or reworded — the moment to check that the new form is still seen
-    expect(found.sort()).toEqual(['README.md: shorthand', 'README.md: shorthand', 'plugin/README.md: shorthand']);
+    // Two commands in the README and one in the plugin's, and the eight links of the plugin's README that
+    // lead into the repository by its address (an installed copy holds the plugin folder alone, so a
+    // relative link out of it would dangle, and the directory's validator reads nothing outside the
+    // folder). A different list means a command or a link was added or reworded — the moment to check
+    // that the new form is still seen
+    expect(found.sort()).toEqual([
+      'README.md: shorthand',
+      'README.md: shorthand',
+      ...Array<string>(8).fill('plugin/README.md: address'),
+      'plugin/README.md: shorthand',
+    ]);
   });
 
   it('give the plugin and marketplace names the documentation uses', () => {
