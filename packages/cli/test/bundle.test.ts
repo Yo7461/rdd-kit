@@ -1,8 +1,8 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 
 // Checks on the committed distribution artifacts that scripts/build-plugin.mjs generates: the readable
@@ -36,6 +36,7 @@ function filesUnder(dir: string, skip?: string): string[] {
 }
 
 const read = (file: string): string => readFileSync(file, 'utf8');
+const isFile = (file: string): boolean => existsSync(file) && statSync(file).isFile();
 
 /** The specifiers a source imports: `from '…'` of an import or an export, and `import('…')`. Each with whether the statement is type-only. */
 function specifiersOf(source: string): { specifier: string; isTypeOnly: boolean }[] {
@@ -100,9 +101,10 @@ describe('the plugin directory', () => {
     expect(ignored.error, 'git could not be started (is it on the PATH?)').toBeUndefined();
     expect(ignored.status, ignored.stderr).toBe(0);
     expect(ignored.stdout.trim()).toBe('');
-    // And the copy on disk is what git sees: the same files, no more
-    const tracked = spawnSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '--', 'plugin/lib'], { cwd: repoRoot, encoding: 'utf8' });
-    expect(tracked.stdout.trim().split('\n').sort()).toEqual(filesUnder(libDir).map((rel) => `plugin/lib/${rel}`));
+    // And the copy on disk is what git sees: the same files, no more (-z: a name is never quoted)
+    const tracked = spawnSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', 'plugin/lib'], { cwd: repoRoot, encoding: 'utf8' });
+    expect(tracked.status, tracked.stderr).toBe(0);
+    expect(tracked.stdout.split('\0').filter((name) => name !== '').sort()).toEqual(filesUnder(libDir).map((rel) => `plugin/lib/${rel}`));
   });
 });
 
@@ -126,7 +128,7 @@ describe('the readable copy of the core under plugin/lib/core', () => {
           continue;
         }
         const target = path.posix.normalize(path.posix.join('core', path.posix.dirname(rel), specifier));
-        expect(existsSync(path.join(libDir, target)), `${hint}, and ${target} is not in the copy`).toBe(true);
+        expect(isFile(path.join(libDir, target)), `${hint}, and ${target} is not a file of the copy`).toBe(true);
         if (target.startsWith('core/')) expect(specifier.endsWith('.ts'), `${hint} — a file of the core is imported as .ts`).toBe(true);
         else expect(target.startsWith('vendor/'), hint).toBe(true);
       }
@@ -146,16 +148,78 @@ describe('the dependencies under plugin/lib/vendor', () => {
         expect(specifier.startsWith('.'), `${hint}, which is not a relative path`).toBe(true);
         const target = path.posix.normalize(path.posix.join(path.posix.dirname(rel), specifier));
         expect(target.startsWith('vendor/'), `${hint}, which leaves lib/vendor`).toBe(true);
-        expect(existsSync(path.join(libDir, target)), `${hint}, and ${target} is not in the copy`).toBe(true);
+        expect(isFile(path.join(libDir, target)), `${hint}, and ${target} is not a file of the copy`).toBe(true);
       }
     }
   });
 
-  it('load as ES modules under Node — the one CommonJS dependency included, converted', async () => {
-    for (const rel of filesUnder(vendorDir)) {
-      if (!/\.(m?js|cjs)$/u.test(rel)) continue;
-      await expect(import(pathToFileURL(path.join(vendorDir, rel)).href), rel).resolves.toBeDefined();
-    }
+  // The copy as a module package of its own, outside the repository: what Node itself makes of it, with
+  // no test runner resolving imports on its behalf
+  const packageDir = mkdtempSync(path.join(tmpdir(), 'rdd-kit-lib-'));
+  if (existsSync(libDir)) {
+    cpSync(libDir, path.join(packageDir, 'lib'), { recursive: true });
+    writeFileSync(path.join(packageDir, 'package.json'), '{ "type": "module" }\n');
+  }
+  afterAll(() => rmSync(packageDir, { recursive: true, force: true, maxRetries: 3 }));
+
+  it('load as ES modules under Node itself — the one CommonJS dependency included, converted', () => {
+    const script = path.join(packageDir, 'load-vendor.mjs');
+    writeFileSync(
+      script,
+      [
+        "import { readdirSync } from 'node:fs';",
+        "import path from 'node:path';",
+        "import { fileURLToPath, pathToFileURL } from 'node:url';",
+        "const root = fileURLToPath(new URL('./lib/vendor/', import.meta.url));",
+        'const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : /\\.(m?js|cjs)$/.test(e.name) ? [path.join(dir, e.name)] : []));',
+        'let count = 0;',
+        'for (const file of walk(root)) { await import(pathToFileURL(file).href); count++; }',
+        'process.stdout.write(String(count));',
+      ].join('\n'),
+    );
+    const res = spawnSync(process.execPath, [script], { encoding: 'utf8', cwd: packageDir });
+    expect(res.status, res.stderr).toBe(0);
+    expect(Number(res.stdout)).toBe(filesUnder(vendorDir).filter((rel) => /\.(m?js|cjs)$/u.test(rel)).length);
+  });
+
+  it('run the core without the globals the engine leaves out — no console, no timers — and with code generation from strings forbidden', () => {
+    // The hooks-module environment has neither Node nor the browser's globals; a dependency that reaches for
+    // `console` (yaml's parser, to print a warning) would throw there. Node strips the copy's types itself
+    const script = path.join(packageDir, 'lint-without-globals.mjs');
+    writeFileSync(
+      script,
+      [
+        "import { execFile } from 'node:child_process';",
+        "import { access, readdir, readFile, stat } from 'node:fs/promises';",
+        "import { pathToFileURL } from 'node:url';",
+        'const [target, configFile, yaml] = process.argv.slice(2);',
+        "const core = await import(new URL('./lib/core/index.ts', import.meta.url).href);",
+        "const kindOf = (s) => (s.isFile() ? 'file' : s.isDirectory() ? 'dir' : 'other');",
+        'const host = {',
+        "  readText: (file) => readFile(file, 'utf8'),",
+        '  exists: (p) => access(p).then(() => true, () => false),',
+        '  listDir: async (dir) => (await readdir(dir, { withFileTypes: true })).map((e) => ({ name: e.name, kind: kindOf(e) })),',
+        '  stat: (p) => stat(p).then((s) => ({ kind: kindOf(s) }), () => null),',
+        "  run: (argv) => new Promise((resolve, reject) => execFile(argv[0], argv.slice(1), { encoding: 'utf8', windowsHide: true }, (error, stdout, stderr) => (error === null ? resolve({ exitCode: 0, stdout, stderr }) : typeof error.code === 'number' ? resolve({ exitCode: error.code, stdout, stderr }) : reject(error)))),",
+        '};',
+        "for (const name of ['console', 'Buffer', 'setTimeout', 'setInterval', 'setImmediate', 'clearTimeout', 'clearInterval', 'clearImmediate', 'queueMicrotask', 'fetch']) delete globalThis[name];",
+        'const frontMatter = core.parseFrontMatterValue(yaml);',
+        'const config = await core.loadConfigFile(configFile, host);',
+        "const linted = await core.lintPath(target, host, config, { now: new Date('2026-07-01T00:00:00Z') });",
+        'process.stdout.write(JSON.stringify({ frontMatter, report: core.toJsonReport(linted) }));',
+      ].join('\n'),
+    );
+    const res = spawnSync(
+      process.execPath,
+      ['--disallow-code-generation-from-strings', script, path.join(repoRoot, 'fixtures', 'valid'), path.join(repoRoot, 'lint-corpus.config.json'), 'updated: !custom 2026-07-01\n'],
+      { encoding: 'utf8', cwd: packageDir },
+    );
+    expect(res.status, res.stderr).toBe(0);
+    const out = JSON.parse(res.stdout) as { frontMatter: { data: unknown; parseError: string | null }; report: { diagnostics: unknown[]; summary: { filesChecked: number } } };
+    // An unresolved tag is a warning the parser would print — kept to itself, the value still parses
+    expect(out.frontMatter).toEqual({ data: { updated: '2026-07-01' }, parseError: null });
+    expect(out.report.summary.filesChecked).toBeGreaterThan(0);
+    expect(out.report.diagnostics).toEqual([]);
   });
 
   it('are listed in THIRD-PARTY-LICENSES.txt, every one, at the installed version, with the license files each ships beside its files', () => {
@@ -165,12 +229,15 @@ describe('the dependencies under plugin/lib/vendor', () => {
     expect(entries.map((entry) => entry.name)).toEqual(vendorPackages());
     expect(list).toContain(`Packages: ${entries.length}.`);
 
-    // The installed version: pnpm's store keeps each package under <name>@<version> (a scope's slash as +)
-    const store = readdirSync(path.join(repoRoot, 'node_modules', '.pnpm'));
-    for (const { name, version } of entries) {
-      const prefix = `${name.replace('/', '+')}@${version}`;
-      expect(store.some((dir) => dir === prefix || dir.startsWith(`${prefix}_`)), `${name}@${version} is installed`).toBe(true);
-    }
+    // The installed version, read from the package's own manifest in pnpm's store (the store directory's
+    // name carries the version too, but a peer suffix or pnpm's shortening of a long name can hide it)
+    const store = path.join(repoRoot, 'node_modules', '.pnpm');
+    const installed = (name: string): string[] =>
+      readdirSync(store).flatMap((dir) => {
+        const manifest = path.join(store, dir, 'node_modules', name, 'package.json');
+        return isFile(manifest) ? [(JSON.parse(read(manifest)) as { version: string }).version] : [];
+      });
+    for (const { name, version } of entries) expect(installed(name), `${name}@${version} is installed`).toContain(version);
 
     // Every entry carries what its license requires a copy to carry: the copyright line, and the
     // permission notice of the declared license (a license text, or the standard text written for a

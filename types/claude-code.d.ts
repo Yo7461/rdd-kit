@@ -4,9 +4,9 @@
  * this repository (tsconfig.plugin.json, run by `pnpm run typecheck`). The engine itself writes the
  * whole declaration, some 18,000 lines, beside a plugin it loads from a folder of the person's own
  * (.claude-plugin/types/claude-code/index.d.ts) and through `/plugin-types`; this subset was written
- * against the declaration of Claude Code 2.1.286, keeps its names and shapes, and is where a change
- * of the engine's API shows up first. At run time the import is empty: the engine hands the module
- * `on` and `$`.
+ * against the declaration of Claude Code 2.1.286, keeps its names and shapes (a hook's `e` frozen to
+ * every depth, the nouns' methods as properties), and is where a change of the engine's API shows up
+ * first. At run time the import is empty: the engine hands the module `on` and `$`.
  */
 declare module 'claude-code' {
   /** A plugin's options as `register(on, options)` receives them. */
@@ -15,12 +15,21 @@ declare module 'claude-code' {
   /** The hooks module's entry: `export const register: Register = (on, options) => { ... }`. */
   export type Register = (on: On, options: PluginOptions) => unknown;
 
+  /** `T` with every property read-only to every depth, arrays and tuples kept as declared: how a hook's `e` is typed. */
+  export type Frozen<T> = T extends (...args: never[]) => unknown
+    ? T
+    : T extends readonly unknown[]
+      ? { [K in keyof T]: Frozen<T[K]> }
+      : T extends object
+        ? { readonly [K in keyof T]: Frozen<T[K]> }
+        : T;
+
   /**
    * A hook: `$` is the engine interface, `e` the event's input (frozen), and `next(e)` runs the
    * plugins beneath and then the engine's own behaviour, resolving to the event's result. A hook that
    * returns without `next` answers for itself; `next({ ...e, x })` rewrites what the rest sees.
    */
-  export type Hook<E, R> = ($: EngineInterface, e: Readonly<E>, next: (e: E) => Promise<R>) => R | Promise<R>;
+  export type Hook<E, R> = ($: EngineInterface, e: Frozen<E>, next: (e: E) => Promise<R>) => R | Promise<R>;
 
   /** `on(event, matcher?, hook)` adds a hook. The forms this plugin's module uses. */
   export interface On {
@@ -33,32 +42,39 @@ declare module 'claude-code' {
   /** The engine interface: each call spelled noun then method. The nouns and methods this module uses. */
   export interface EngineInterface {
     readonly session: {
-      /** Returns the directory the session runs in, absolute. */
-      cwd(): Promise<string>;
+      /** Returns the directory the session runs in, absolute. A `cd` in the shell moves it. */
+      readonly cwd: () => Promise<string>;
+      /** Returns the session's project root, absolute: where it started, or where `/cd` took it. A shell `cd` does not move it. */
+      readonly root: () => Promise<string>;
     };
     /** The file system as the engine's own process reaches it; a relative path is under the session's working directory. */
     readonly fs: {
       /** Reads a file and returns its text (UTF-8). Rejects when missing, or over 4 MiB. */
-      read(path: string): Promise<string>;
+      readonly read: (path: string) => Promise<string>;
       /** Lists a directory by name, each entry as it stands; absent, the working directory. */
-      list(path?: string): Promise<FsEntry[]>;
+      readonly list: (path?: string) => Promise<FsEntry[]>;
       /** Returns whether the path exists. */
-      exists(path: string): Promise<boolean>;
+      readonly exists: (path: string) => Promise<boolean>;
       /** Returns what the path leads to (a link followed). Rejects when missing. */
-      stat(path: string, options?: FsStatOptions): Promise<FsStat>;
+      readonly stat: (path: string, options?: FsStatOptions) => Promise<FsStat>;
     };
     /** Commands on the host, run as the user the session runs as. */
     readonly process: {
-      /** Runs a command by its argument vector (no shell) and resolves once it exits, any exit code. Rejects when it cannot start or is still running at the timeout. */
-      run(argv: readonly string[], init?: ProcessRunInit): Promise<ProcessRunResult>;
+      /** Runs a command by its argument vector (no shell) and resolves once it exits, any exit code — each stream cut at 4 MiB. Rejects when it cannot start or is still running at the timeout. */
+      readonly run: (argv: readonly string[], init?: ProcessRunInit) => Promise<ProcessRunResult>;
+    };
+    /** The time and timers, each an event through the host. */
+    readonly clock: {
+      /** Calls `fn` once after `ms` milliseconds; `cancel()` before then stops it. */
+      readonly after: TimerCall;
     };
     readonly ui: {
       /** Shows `text` as one dim line of the transcript (and in the debug log). */
-      log(text: string, options?: UiLogOptions): void;
+      readonly log: (text: string, options?: UiLogOptions) => void;
     };
     readonly tool: {
       /** Declares a tool the model can call, listed as `mcp__<plugin>__<name>`; served by a `tool.call` hook on that name. Rejects until the session binds, at `session.start`. */
-      register(tool: ToolSpec): Promise<{ tool: string }>;
+      readonly register: (tool: ToolSpec) => Promise<{ tool: string }>;
     };
   }
 
@@ -167,7 +183,7 @@ declare module 'claude-code' {
     message: SessionAppendMessage;
     door: SessionAppendDoor;
     /** Who caused the row (the person, the model, a tool, the engine, a settings hook, a plugin). Pinned. */
-    origin: { readonly kind: string; readonly [field: string]: unknown };
+    origin: { kind: string; [field: string]: unknown };
     uuid: string;
     agentId?: string;
   };
@@ -231,6 +247,15 @@ declare module 'claude-code' {
     isStdoutTruncated: boolean;
     isStderrTruncated: boolean;
   };
+
+  /** A pending timer from `$.clock.after`. */
+  export type Timer = {
+    /** Stops it; a stopped timer never fires again. */
+    cancel: () => void;
+  };
+
+  /** A timer on `$.clock`: `fn` runs after `ms` milliseconds. */
+  export type TimerCall = (ms: number, fn: () => void) => Timer;
 
   export type UiLogOptions = {
     /** Where the line goes: `transcript` (the default) or `debug`. */

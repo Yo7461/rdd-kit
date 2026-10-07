@@ -19,9 +19,10 @@
 // The copy under plugin/lib is what the plugin's hooks module imports. Claude Code loads a hooks module in an
 // environment of its own — no Node.js — and a module there imports its own plugin's files by relative path
 // and nothing else: no bare package names, no `node:` modules. So the copy rewrites every import. The set
-// of files is what esbuild reaches from packages/core/src/index.ts with `platform: 'neutral'` (the `module`
-// entry of a package ahead of `main`, so yaml comes as its browser build) — every file reached, not only
-// the bytes a bundle would keep, because the engine loads the module graph as written. A bare import is
+// of files is what esbuild reaches from packages/core/src/index.ts with `platform: 'neutral'` — a package's
+// `exports` resolve under their `default` condition with no `node` condition in force, so yaml comes as its
+// browser build, and for a package without `exports` the `module` entry goes ahead of `main` — every file
+// reached, not only the bytes a bundle would keep, because the engine loads the module graph as written. A bare import is
 // rewritten to the relative path of the file esbuild resolved it to; a relative `./x.js` of the core's own
 // source becomes `./x.ts`, the file that actually exists (the type-only imports esbuild drops included).
 // The one CommonJS file among the dependencies is converted to an ES module on its own. The core's files
@@ -252,19 +253,26 @@ function destinationOf(inputPath) {
   return { kind: 'third', pkg, rel: `vendor/${pkg}/${inside}` };
 }
 
-/** One CommonJS file as an ES module (esbuild, that file alone — anything it required would be inlined with it). */
+/**
+ * One CommonJS file as an ES module (esbuild, that file alone — anything it required would be inlined with
+ * it). The file's own directory is the working directory, so the comment esbuild writes above the module
+ * names the file alone, not where pnpm happened to put it; and the comments that head the original (a
+ * copyright line, a license name) are put back above the conversion, since esbuild drops them.
+ */
 async function cjsToEsm(inputPath) {
+  const file = path.join(repoRoot, inputPath);
   const converted = await build({
-    entryPoints: [path.join(repoRoot, inputPath)],
+    entryPoints: [path.basename(file)],
     bundle: true,
     platform: 'neutral',
     format: 'esm',
     target: 'es2022',
     write: false,
     logLevel: 'silent',
-    absWorkingDir: repoRoot,
+    absWorkingDir: path.dirname(file),
   });
-  return converted.outputFiles[0].text;
+  const heading = /^(?:\s*(?:\/\/[^\n]*|\/\*[\s\S]*?\*\/)\s*)+/.exec(readFileSync(file, 'utf8'))?.[0].trim() ?? '';
+  return heading === '' ? converted.outputFiles[0].text : `${heading}\n\n${converted.outputFiles[0].text}`;
 }
 
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -296,6 +304,11 @@ async function readableCopy() {
     logLevel: 'silent',
     logOverride: { 'empty-import-meta': 'silent' },
   });
+  // A warning here (an import of a name a module does not export, say) is what the engine, which links the
+  // copy as written, would refuse at load — so it stops the build
+  if (reach.warnings.length > 0) {
+    throw new Error(`esbuild warns about the core and its dependencies:\n${reach.warnings.map((w) => `  ${w.location?.file ?? ''}: ${w.text}`).join('\n')}`);
+  }
   const inputs = new Map(Object.entries(reach.metafile.inputs).map(([p, input]) => [toPosix(p), input]));
   for (const [inputPath, input] of inputs) {
     const external = input.imports.filter((imp) => imp.external).map((imp) => imp.path);
@@ -323,19 +336,29 @@ async function readableCopy() {
   for (const [inputPath, destination] of destinations) {
     const input = inputs.get(inputPath);
     let text = input?.format === 'cjs' ? await cjsToEsm(inputPath) : readFileSync(path.join(repoRoot, inputPath), 'utf8');
+    // The core's own files are copied with LF line endings whatever the working tree holds (the copy takes no
+    // EOL conversion from git, so a CRLF checkout would otherwise commit CRLF); a dependency comes as installed
+    if (destination.kind === 'own') text = text.replace(/\r\n?/g, '\n');
     const fromDir = path.posix.dirname(destination.rel);
     const relativeTo = (targetRel) => {
       const rel = path.posix.relative(fromDir, targetRel);
-      return rel.startsWith('.') ? rel : `./${rel}`;
+      return rel.startsWith('./') || rel.startsWith('../') ? rel : `./${rel}`;
     };
     // The imports esbuild resolved: a bare package name becomes the relative path of the file it resolved to,
-    // and a relative path is re-aimed at the copy (where `./x.js` of the core is the file `./x.ts`)
+    // and a relative path is re-aimed at the copy (where `./x.js` of the core is the file `./x.ts`). One
+    // specifier may be imported twice from a file (a value and a re-export, say) — it is rewritten once
+    const targets = new Map();
     for (const imp of input?.imports ?? []) {
       if (imp.original === undefined) throw new Error(`${inputPath}: an import without its original specifier (${imp.path})`);
       const target = destinations.get(toPosix(imp.path));
       if (!target) throw new Error(`${inputPath}: imports ${imp.original}, resolved to ${imp.path}, which the copy does not carry`);
-      const rewritten = rewriteSpecifier(text, imp.original, relativeTo(target.rel));
-      if (rewritten.count === 0) throw new Error(`${inputPath}: the specifier ${imp.original} is not found in the source text`);
+      const known = targets.get(imp.original);
+      if (known !== undefined && known !== target.rel) throw new Error(`${inputPath}: ${imp.original} resolves to both ${known} and ${target.rel}`);
+      targets.set(imp.original, target.rel);
+    }
+    for (const [original, targetRel] of targets) {
+      const rewritten = rewriteSpecifier(text, original, relativeTo(targetRel));
+      if (rewritten.count === 0) throw new Error(`${inputPath}: the specifier ${original} is not found in the source text`);
       text = rewritten.text;
     }
     // The core's type-only relative imports, which esbuild drops before the metafile sees them: `./x.js` → `./x.ts`.
@@ -416,15 +439,16 @@ outputs.set('packages/cli/bundle/roadmap-lint.cjs', bundle.generated);
 outputs.set('packages/cli/LICENSE', rootLicense);
 outputs.set('packages/cli/THIRD-PARTY-LICENSES.txt', thirdParty);
 
-/** Every file under plugin/lib on disk, by POSIX path from the repository root. */
+/** Every file under plugin/lib on disk, by POSIX path from the repository root — what the OS drops there left out. */
 function filesUnderLib() {
+  const osJunk = new Set(['.DS_Store', 'Thumbs.db', 'desktop.ini']);
   const out = [];
   const walk = (dir) => {
     if (!existsSync(path.join(repoRoot, dir))) return;
     for (const entry of readdirSync(path.join(repoRoot, dir), { withFileTypes: true })) {
       const rel = `${dir}/${entry.name}`;
       if (entry.isDirectory()) walk(rel);
-      else out.push(rel);
+      else if (!osJunk.has(entry.name)) out.push(rel);
     }
   };
   walk(toPosix(libDir));

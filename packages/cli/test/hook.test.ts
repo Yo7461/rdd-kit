@@ -16,12 +16,12 @@ const cliMain = path.join(repoRoot, 'packages', 'cli', 'dist', 'main.js');
 const fixturesRoot = path.join(repoRoot, 'fixtures');
 const validRoot = path.join(fixturesRoot, 'valid');
 
-// Build an env with the relevant variables dropped, so the test keeps full control of the hook's CLI
+// Build an env with the variables the hook reads dropped, so the test keeps full control of the hook's CLI
 // resolution order even when it runs under Claude Code
 const baseEnv = (): NodeJS.ProcessEnv => {
   const env: NodeJS.ProcessEnv = {};
   for (const [k, v] of Object.entries(process.env)) {
-    if (['ROADMAP_LINT_BIN', 'CLAUDE_PLUGIN_ROOT', 'CLAUDE_PROJECT_DIR'].includes(k)) continue;
+    if (['ROADMAP_LINT_BIN', 'CLAUDE_PROJECT_DIR'].includes(k)) continue;
     env[k] = v;
   }
   return env;
@@ -140,9 +140,9 @@ describe('the non-destructive contract of the roadmap-lint hook', () => {
     });
   });
 
-  it('T9: the bundle beside the hook — the package it ships in — is what runs when nothing else is named', () => {
-    // The committed bundle under packages/cli/bundle, found from the hook\'s own location: no env var,
-    // no PATH, and a project that is not the linter\'s checkout
+  it('T9: the bundle beside the hook — the package it ships in — is what runs when nothing else is named, ahead of a development dist', () => {
+    // The committed bundle under packages/cli/bundle, found from the hook's own location: no env var,
+    // no PATH, and a project that is not the linter's checkout
     withSizeViolation((dir) => {
       const res = runHook(editJson(dir, path.join('roadmap', 'status.md')), {
         ...stripPath(baseEnv()),
@@ -151,6 +151,22 @@ describe('the non-destructive contract of the roadmap-lint hook', () => {
       expect(res.status).toBe(2);
       expect(res.stderr).toContain('roadmap-lint: 1 problem (1 error, 0 warnings) after editing roadmap/.');
       expect(res.stderr).toContain('SIZE-1');
+
+      // An env var that names nothing falls through to the bundle; a development dist of a linter checkout
+      // (step 3, which T6 shows is honored by a hook without a bundle beside it) does not get ahead of it
+      const distDir = path.join(dir, 'packages', 'cli', 'dist');
+      mkdirSync(distDir, { recursive: true });
+      const fake = { version: 1, diagnostics: [{ rule: 'FAKE-1', severity: 'error', anchor: { kind: 'repo' }, message: 'ran the wrong program', suggestion: '' }], summary: { errors: 1, warnings: 0, filesChecked: 0 }, notices: [] };
+      writeFileSync(path.join(distDir, 'main.js'), `process.stdout.write(${JSON.stringify(JSON.stringify(fake))}); process.exitCode = 1;\n`);
+      writeFileSync(path.join(dir, 'packages', 'cli', 'package.json'), JSON.stringify({ name: 'roadmap-lint' }));
+      const beside = runHook(editJson(dir, path.join('roadmap', 'status.md')), {
+        ...stripPath(baseEnv()),
+        CLAUDE_PROJECT_DIR: dir,
+        ROADMAP_LINT_BIN: path.join(dir, 'no-such-cli.js'),
+      });
+      expect(beside.status).toBe(2);
+      expect(beside.stderr).toContain('SIZE-1');
+      expect(beside.stderr).not.toContain('ran the wrong program');
     });
   });
 

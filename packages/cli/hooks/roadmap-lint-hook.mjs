@@ -32,7 +32,9 @@ function isLinterCheckout(projectDir) {
   }
 }
 
-// Resolution order: an explicit env var -> the bundle beside this hook (the package it ships in) -> the dist of the linter's own development checkout -> PATH
+// Resolution order: an explicit env var -> the bundle beside this hook (the package it ships in) -> the dist of the
+// linter's own development checkout -> PATH. In its package the bundle is always beside it, so the last two steps
+// are reached by a copy of this hook placed elsewhere (a project that keeps the hook script alone, say)
 function resolveCli(projectDir) {
   const envBin = process.env.ROADMAP_LINT_BIN;
   if (envBin && existsSync(envBin)) return jsOrExe(envBin);

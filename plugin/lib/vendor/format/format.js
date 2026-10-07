@@ -1,3 +1,14 @@
+//
+// format - printf-like string formatting for JavaScript
+// github.com/samsonjs/format
+// @_sjs
+//
+// Copyright 2010 - 2013 Sami Samhuri <sami@samhuri.net>
+//
+// MIT License
+// http://sjs.mit-license.org
+//
+
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __commonJS = (cb, mod) => function __require() {
   try {
@@ -7,9 +18,9 @@ var __commonJS = (cb, mod) => function __require() {
   }
 };
 
-// node_modules/.pnpm/format@0.2.2/node_modules/format/format.js
+// format.js
 var require_format = __commonJS({
-  "node_modules/.pnpm/format@0.2.2/node_modules/format/format.js"(exports, module) {
+  "format.js"(exports, module) {
     (function() {
       var namespace;
       if (typeof module !== "undefined") {

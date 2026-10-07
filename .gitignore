@@ -14,8 +14,9 @@ dist/
 coverage/
 *.tsbuildinfo
 
-# The readable copy under plugin/lib is a committed artifact, whatever its files are called — a
-# dependency ships its browser build under a directory named dist, which the rule above would hide
+# The readable copy under plugin/lib is a committed artifact: a dependency ships its browser build
+# under a directory named dist, which the rule above would hide. The test suite checks that git sees
+# every file of the copy, so a file another rule hides fails there
 !plugin/lib/**/dist/
 
 # What Claude Code writes beside a plugin it loads from this checkout (claude --plugin-dir plugin):

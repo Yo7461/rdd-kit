@@ -7756,7 +7756,7 @@ function splitLines(normalized) {
 var import_yaml = __toESM(require_dist(), 1);
 function parseFrontMatterValue(raw) {
   try {
-    return { data: (0, import_yaml.parse)(raw) ?? null, parseError: null };
+    return { data: (0, import_yaml.parse)(raw, { logLevel: "error" }) ?? null, parseError: null };
   } catch (error) {
     return { data: null, parseError: error instanceof Error ? error.message : String(error) };
   }

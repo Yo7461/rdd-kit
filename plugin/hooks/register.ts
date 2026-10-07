@@ -19,12 +19,15 @@ import path from '../lib/core/path.ts';
 // reads — the files under roadmap/, the config beside it, and git with `--no-optional-locks`.
 //
 // Two things it does, both fail-open:
-//  - after an Edit or Write under <working directory>/roadmap/, the records are linted and the report
-//    joins the body of that tool call's result — only when there are diagnostics. Zero diagnostics, a
-//    file elsewhere, and a lint that fails leave the result untouched; the edit itself is never
-//    blocked, and a failure is said in one dim line of the transcript ($.ui.log)
+//  - after an Edit or Write under <project root>/roadmap/, the records are linted and the report
+//    joins the body of that tool call's result — only when there are diagnostics. Zero diagnostics,
+//    a file elsewhere, and a lint that fails or outruns its deadline leave the result untouched; the
+//    edit itself is never blocked, and a failure is said in one dim line of the transcript ($.ui.log)
 //  - the tool `roadmap_lint` (listed to the model as mcp__rdd-kit__roadmap_lint) runs the same lint on
 //    request, for the records check of the skill's doctor: the same text or JSON report the CLI prints
+//
+// The project root is where the session started (or where /cd took it): a `cd` in the shell moves
+// the working directory, not the project, and the records sit under the project.
 //
 // The report of an Edit or Write cannot be put into the result from the tool.call hook itself (the
 // engine keeps the text it renders for the model); it joins the result where the row is stored, in
@@ -40,15 +43,22 @@ const TOOL_NAME = 'roadmap_lint';
 const TOOL_DESCRIPTION =
   'Runs roadmap-lint over the roadmap/ records of a roadmap-driven project — every rule, the same report as the CLI. ' +
   'Use it for the records check of /roadmap doctor and before a session closes. ' +
-  'Input: `path` (optional: the directory that holds roadmap/, or roadmap/ itself, relative to the working directory or absolute; default: the working directory), ' +
+  "Input: `path` (optional: the directory that holds roadmap/, or roadmap/ itself, relative to the session's project root or absolute; default: the project root), " +
   '`format` (optional: `text` or `json`; default `text`).';
 const TOOL_INPUT_SCHEMA = {
   type: 'object',
   properties: {
-    path: { type: 'string', description: 'The directory that holds roadmap/, or roadmap/ itself. Default: the working directory.' },
+    path: { type: 'string', description: "The directory that holds roadmap/, or roadmap/ itself. Default: the session's project root." },
     format: { type: 'string', enum: ['text', 'json'], description: 'The report format. Default: text.' },
   },
 };
+
+/** How long the check after an edit may take before the result goes out without it — the command hook's own limit. */
+const EDIT_CHECK_TIMEOUT_MS = 20_000;
+/** How long the tool may take: it runs on request, so it gets more room than the check after an edit. */
+const TOOL_TIMEOUT_MS = 60_000;
+/** How many reports may wait for their result row at once: a row that never comes must not pile up. */
+const MAX_PENDING = 16;
 
 /** The report of an Edit or Write, handed from its tool.call hook to the session.append that stores its result row, by the call's id. */
 const pending = new Map<string, string>();
@@ -66,16 +76,36 @@ function hostOf($: EngineInterface): Host {
         return null; // the engine rejects a missing path; the core reads that as "nothing there"
       }
     },
-    run: (argv) => $.process.run(argv),
+    run: async (argv) => {
+      const ran = await $.process.run(argv);
+      // The engine hands over the first 4 MiB of each stream and says when it cut: a listing or a log cut
+      // short must not be read as complete (the CLI's host rejects at its own limit the same way)
+      if (ran.isStdoutTruncated || ran.isStderrTruncated) {
+        throw new Error(`The output of ${argv[0] ?? 'the command'} exceeds what the engine hands over (4 MiB).`);
+      }
+      return { exitCode: ran.exitCode, stdout: ran.stdout, stderr: ran.stderr };
+    },
   };
 }
 
-/** Whether the edited file is under <cwd>/roadmap. A Windows path compares without regard to case. */
-function isUnderRoadmap(filePath: string, cwd: string): boolean {
-  const fold = (p: string): string => (/^[A-Za-z]:\//.test(p) ? p.toLowerCase() : p);
-  const root = fold(path.join(cwd, 'roadmap'));
-  const target = fold(path.resolve(cwd, filePath));
-  return target === root || target.startsWith(`${root}/`);
+/**
+ * Runs `work` against a deadline on the engine's clock. Past it the result is the error, and the work
+ * goes on unobserved to its own end (a git that hangs is killed by the engine's own limit on a command).
+ */
+function withDeadline<T>($: EngineInterface, ms: number, work: () => Promise<T>): Promise<T> {
+  let timer: { cancel: () => void } | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = $.clock.after(ms, () => reject(new Error(`the check took longer than ${ms} ms`)));
+  });
+  return Promise.race([work(), deadline]).finally(() => timer?.cancel());
+}
+
+/** Whether the edited file is under <root>/roadmap. A Windows path — a drive or a UNC share — compares without regard to case. */
+function isUnderRoadmap(filePath: string, root: string): boolean {
+  const fold = (p: string): string => (/^(?:[A-Za-z]:\/|\/\/)/.test(p) ? p.toLowerCase() : p);
+  const records = fold(path.join(root, 'roadmap'));
+  const target = fold(path.resolve(root, filePath));
+  return target === records || target.startsWith(`${records}/`);
 }
 
 /** The project's config, discovered beside roadmap/ the way the CLI discovers it (an invalid one throws). */
@@ -123,15 +153,17 @@ export const register: Register = (on) => {
   on('tool.call', { tool: ['Edit', 'Write'] }, async ($, e, next) => {
     const result = await next(e);
     if (result.deny !== undefined || result.isError === true) return result;
-    const cwd = await $.session.cwd();
-    if (!isUnderRoadmap(e.file_path, cwd)) return result;
+    const root = await $.session.root();
+    if (!isUnderRoadmap(e.file_path, root)) return result;
 
     let text: string | null;
     try {
-      const host = hostOf($);
-      const target = await resolveTarget(cwd, host);
-      if (target === null) return result; // roadmap/ is not a directory of the working directory after all
-      text = report(await runLint(target, host, await configOf(target.baseDir, host)));
+      text = await withDeadline($, EDIT_CHECK_TIMEOUT_MS, async () => {
+        const host = hostOf($);
+        const target = await resolveTarget(root, host);
+        if (target === null) return null; // roadmap/ is not a directory of the project after all
+        return report(await runLint(target, host, await configOf(target.baseDir, host)));
+      });
     } catch (error) {
       // Fail-open: the result stays as the tool made it, and the person sees why the check is missing
       $.ui.log(`roadmap-lint: the check after editing roadmap/ did not run — ${describe(error)}`);
@@ -140,6 +172,10 @@ export const register: Register = (on) => {
     if (text === null) return result;
 
     $.ui.log(text);
+    if (pending.size >= MAX_PENDING) {
+      const oldest = pending.keys().next().value;
+      if (oldest !== undefined) pending.delete(oldest);
+    }
     pending.set(e.tool_use_id, text);
     return result;
   });
@@ -171,18 +207,20 @@ export const register: Register = (on) => {
   });
 
   on('tool.call', { tool: 'mcp__rdd-kit__roadmap_lint' }, async ($, e): Promise<ToolCallResult> => {
-    const format = e['format'] ?? 'text';
+    const format = e['format'] === undefined ? 'text' : e['format'];
     if (format !== 'text' && format !== 'json') return { deny: 'The format must be either text or json.' };
     const asked = e['path'];
     if (asked !== undefined && typeof asked !== 'string') return { deny: 'The path must be a string.' };
-    const cwd = await $.session.cwd();
-    const inputPath = asked === undefined || asked === '' ? cwd : path.resolve(cwd, asked);
+    const root = await $.session.root();
+    const inputPath = asked === undefined || asked === '' ? root : path.resolve(root, asked);
     try {
-      const host = hostOf($);
-      const target = await resolveTarget(inputPath, host);
-      if (target === null) return { deny: `Cannot find roadmap/ under ${inputPath}.` };
-      const linted = await runLint(target, host, await configOf(target.baseDir, host));
-      return { result: format === 'json' ? formatJson(linted) : formatText(linted) };
+      return await withDeadline($, TOOL_TIMEOUT_MS, async (): Promise<ToolCallResult> => {
+        const host = hostOf($);
+        const target = await resolveTarget(inputPath, host);
+        if (target === null) return { deny: `Cannot find roadmap/ under ${inputPath}.` };
+        const linted = await runLint(target, host, await configOf(target.baseDir, host));
+        return { result: format === 'json' ? formatJson(linted) : formatText(linted) };
+      });
     } catch (error) {
       return { deny: `roadmap-lint could not run: ${describe(error)}` };
     }
