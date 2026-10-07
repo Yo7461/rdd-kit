@@ -1,11 +1,11 @@
 # rdd-kit
 
-The /roadmap skill for roadmap-driven development, plus roadmap-lint — a CLI linter that makes its records tool-verifiable.
+The /roadmap skill for roadmap-driven development, plus roadmap-lint — a linter that makes its records tool-verifiable.
 
 - **The skill (/roadmap)** — runs the development loop from a revisable roadmap and a current-position file, and keeps a living spec that follows the implementation
 - **roadmap-lint** — checks the structure of the records the skill writes (front matter, the structure and placement of the files, reference integrity, ID discipline, size limits, text anomalies, git state — 35 rules in all), inside Claude Code right after an edit, and from the command line
 
-Both come in one Claude Code plugin.
+The skill and the lint that runs inside Claude Code come in one Claude Code plugin. The command-line linter is built from this repository ([doc/roadmap-lint.md](doc/roadmap-lint.md#using-the-linter-without-the-plugin)).
 
 ## Roadmap-driven development
 
@@ -53,8 +53,8 @@ Other situations call for another kind of method:
 
 ## Requirements
 
-- Claude Code **2.1.286 or later** in the desktop app, or **2.1.287 or later** in the terminal — the versions from which a plugin's hooks module loads by default. Hooks modules are an early-access part of Claude Code, and their interface can change between versions: each release of rdd-kit names the version it was run on (this one: 2.1.289), and a check that stops working never blocks an edit
-- Node.js **>= 24** only for the CLI — roadmap-lint by hand or in CI ([doc/roadmap-lint.md](doc/roadmap-lint.md#using-the-linter-without-the-plugin)). The plugin itself needs no Node.js
+- Claude Code **2.1.286 or later** in the desktop app, or **2.1.287 or later** in the terminal — the versions from which a plugin's hooks module loads by default. Hooks modules are an early-access part of Claude Code, and their interface can change between versions: each release of rdd-kit names the version it was run on (this one: 2.1.289, in the terminal on Windows; other surfaces were not tried), and a lint that stops working never blocks an edit. On an older Claude Code the skill still works, but the lint after an edit and the records-check tool are absent, so the records check falls back to the CLI (not tried). Whether the module is running shows in two places: the tool `mcp__rdd-kit__roadmap_lint` is in the tool list, and `/roadmap doctor` reports through it
+- Node.js **>= 24** only for the CLI — roadmap-lint by hand or in CI ([doc/roadmap-lint.md](doc/roadmap-lint.md#using-the-linter-without-the-plugin)). The plugin itself needs no Node.js. In a repository with a very long history (tens of thousands of commits) the lint inside Claude Code cannot read the history within the engine's limits, and the CLI is the way to run it
 - git (recommended — without it the git rules are skipped and the skill leaves the commit steps out); the git rules need 2.15 or later
 
 ## Installation
@@ -64,7 +64,7 @@ claude plugin marketplace add Yo7461/rdd-kit
 claude plugin install rdd-kit@rdd-kit
 ```
 
-Inside a Claude Code session one command covers both steps (Claude Code v2.1.275 or later). It asks before adding the marketplace, then opens the plugin's details to install from:
+Inside a Claude Code session one command covers both steps. It asks before adding the marketplace, then opens the plugin's details to install from:
 
 ```
 /plugin install rdd-kit --marketplace Yo7461/rdd-kit
@@ -77,7 +77,7 @@ Inside a Claude Code session one command covers both steps (Claude Code v2.1.275
 ## Quick start
 
 1. Open Claude Code in the target project and run `/roadmap init` — an interview, then an outline of the whole course, then the generated `roadmap/`. `init` also appends a section to the project's `CLAUDE.md` and, under git, creates or extends its `.gitignore`. `/roadmap` is the short form of the skill's full name, `/rdd-kit:roadmap`, and it is available unless another command already uses that name. `/plugin` shows whether the plugin is enabled
-2. Run `/roadmap start` to open a session and work. The plugin lints after every `Edit` or `Write` Claude makes under `roadmap/` and adds the report to the result of that edit **only when there are diagnostics**; a check that fails never blocks the edit. The session closes by itself once the work reaches a stopping point: it finalizes the records, commits, and recommends the next command
+2. Run `/roadmap start` to open a session and work. The plugin lints after every `Edit` or `Write` Claude makes under `roadmap/` and, **only when there are diagnostics**, adds the report to the result of that edit and shows it as a dim line of the transcript; a lint that fails never blocks the edit. The session closes by itself once the work reaches a stopping point: it finalizes the records, commits, and recommends the next command
 3. `/roadmap` with no argument follows that recommendation. `/roadmap status` shows where the project stands, `/roadmap replan <topic>` revisits the roadmap, and `/roadmap doctor` checks the records
 4. To run the linter by hand, see [doc/roadmap-lint.md](doc/roadmap-lint.md)
 
@@ -101,4 +101,4 @@ Pass `uninstall` the same `--scope` the install used. Removing the marketplace a
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE). The copyright notice is in [NOTICE](NOTICE). The plugin ships copies of third-party packages under the MIT and ISC licenses, and the CLI bundle inlines them; their copyright notices and license texts are in [plugin/THIRD-PARTY-LICENSES.txt](plugin/THIRD-PARTY-LICENSES.txt).
+Apache-2.0. See [LICENSE](LICENSE). The copyright notice is in [NOTICE](NOTICE). The plugin ships copies of third-party packages under the MIT and ISC licenses, and the CLI bundle inlines a subset of them; their copyright notices and license texts are in [plugin/THIRD-PARTY-LICENSES.txt](plugin/THIRD-PARTY-LICENSES.txt).

@@ -587,8 +587,8 @@ Check the whole of `roadmap/` and report what turns up under the title `Records 
 
 Run it over the directory that contains `roadmap/` (normally the project root), by the first of these two routes that is there:
 
-1. **The plugin's tool** — `mcp__rdd-kit__roadmap_lint`, which the rdd-kit plugin registers (it is in the tool list while the plugin is enabled). Both of its inputs are optional: `path` (the directory that holds `roadmap/`, or `roadmap/` itself — relative to the project root, or absolute; the default is the project root) and `format` (`text` or `json`; the default is `text`). It returns the same report the CLI prints, and an error result when it cannot find `roadmap/`, the format is wrong, or the lint itself fails — read the error, fix the path, and call it again
-2. **The CLI** — where the plugin is not installed:
+1. **The plugin's tool** — `mcp__rdd-kit__roadmap_lint`, which the rdd-kit plugin registers (it is in the tool list while the plugin is enabled; when the session shows it by name only, load its schema first, then call it). Both of its inputs are optional: `path` (the directory that holds `roadmap/`, or `roadmap/` itself — relative to the project root, or absolute; the default is the project root) and `format` (`text` or `json`; the default is `text`). It returns the same report the CLI prints, and an error result when it cannot find `roadmap/`, the format is wrong, the config is invalid, or the lint itself fails — read the error: fix the path, or the config it names, and call it again; when the error is neither (the lint ran out of time, or the repository's history is more than the engine hands over), take the CLI route
+2. **The CLI** — when the tool is not in the tool list (the plugin not installed or not enabled), or when the tool cannot run the lint:
 
    ```
    roadmap-lint [path] [--config <path>] [--format text|json] [--fail-severity error|warning]
@@ -598,7 +598,7 @@ Run it over the directory that contains `roadmap/` (normally the project root), 
    - **How to read the exit code:** 0 = no diagnostics at or above `--fail-severity` (`error` by default). **Warnings can still be there — always read the output itself.** 1 = there are some. 2 = an execution error (invalid arguments, invalid config, a missing target — not a lint result; fix the command, the path, or the config and run it again)
    - **How the CLI is resolved:** 1. the `ROADMAP_LINT_BIN` environment variable when it is set (the program to run — a `.js` / `.cjs` / `.mjs` file runs under `node`), 2. `roadmap-lint` on the PATH (an npm install), 3. in a checkout of the linter's own repository, `node <checkout>/packages/cli/bundle/roadmap-lint.cjs`. The plugin carries no CLI, so there is nothing to look for in a plugin folder. Don't conclude "not installed" from the absence of one of them alone
 
-The tool and the CLI run the same rules with the same config and print the same report. Report the situation and the installation steps when neither route can run it (the plugin not enabled, the CLI not installed or not built). Don't substitute reading checks 1–7 by eye
+The tool and the CLI run the same rules with the same config and print the same report; the tool reads the repository through the engine, which hands over a bounded amount of git output, so a very long history is the CLI's case. Report the situation and the installation steps when neither route can run it (the plugin not enabled, the CLI not installed or not built). Don't substitute reading checks 1–7 by eye
 
 How the checks map to the rules (roadmap-lint runs all 35 rules — the ones under checks 1–7 and, on top of them, the structural ones in the last row):
 

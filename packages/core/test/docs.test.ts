@@ -477,3 +477,25 @@ describe('the manifests', () => {
     expect((first ?? '').slice(0, head.length)).toBe(head);
   });
 });
+
+describe('the hooks module as the documentation names it', () => {
+  const pluginName = readJson('plugin/.claude-plugin/plugin.json')['name'] as string;
+
+  it('is a tool named after the plugin wherever a document or the skill names it', () => {
+    const found = new Set<string>();
+    for (const file of [...documents(), ...skillFiles()]) {
+      for (const value of captures(read(file), /mcp__([\w-]+)__roadmap_lint/gu)) {
+        found.add(file);
+        expect(`${file}: ${value}`).toBe(`${file}: ${pluginName}`);
+      }
+    }
+    // Where a user meets the tool: both READMEs, the linter page, and the skill's records check
+    expect([...found].sort()).toEqual(['README.md', 'doc/roadmap-lint.md', 'plugin/README.md', 'plugin/skills/roadmap/references/workflows.md']);
+  });
+
+  it('needs the same Claude Code versions in both READMEs', () => {
+    const versions = (file: string): string[] => [...new Set(captures(read(file), /\b(2\.\d+\.\d+)\b/gu))].sort();
+    expect(versions('README.md').length).toBeGreaterThan(0);
+    expect(versions('plugin/README.md')).toEqual(versions('README.md'));
+  });
+});

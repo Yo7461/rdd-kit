@@ -18,8 +18,8 @@ roadmap-lint checks the structure of the records under `roadmap/`: front matter,
 
 With the plugin installed, the linter runs without any setup and without Node.js — the plugin's hooks module runs it inside Claude Code:
 
-- **After an edit** — after every `Edit` or `Write` tool call on a file under `roadmap/` in a Claude Code session. The report joins the result of that edit, only when there are diagnostics (see [plugin/README.md](../plugin/README.md)). A change made through the shell does not start the check; it is caught at the next such edit, or by the lint before the close commit
-- **From the skill** — before every close commit, and as the first step of `/roadmap doctor`: the skill calls the tool `mcp__rdd-kit__roadmap_lint` that the plugin registers (the same report, as text or as JSON), and falls back to the CLI where the plugin is not installed
+- **After an edit** — after every `Edit` or `Write` tool call on a file under `roadmap/` in a Claude Code session. The report joins the result of that edit only when there are diagnostics (see [plugin/README.md](../plugin/README.md)). A change made through the shell does not start the lint; it is caught at the next such edit, or by the lint before the close commit
+- **From the skill** — before every close commit, and as the first step of `/roadmap doctor`: the skill calls the tool `mcp__rdd-kit__roadmap_lint` that the plugin registers (the same report, as text or as JSON), and falls back to the CLI when the tool is not in the tool list (the plugin not installed or not enabled) or cannot read the repository within the engine's limits
 - **By hand** — the CLI: `node <checkout>/packages/cli/bundle/roadmap-lint.cjs [path]` from a checkout of this repository, or `roadmap-lint [path]` once the npm package is installed. The plugin carries no CLI
 
 The CLI bundle has no dependencies and needs only Node.js >= 24. For the places the plugin does not reach — a CI job, a hook set up by hand — see [Using the linter without the plugin](#using-the-linter-without-the-plugin).
@@ -203,7 +203,7 @@ These need no reaction. The sequence of edits is finished first, and the check t
 
 rdd-kit is distributed as a Claude Code plugin, and the plugin runs the linter inside Claude Code. The CLI is for the places the plugin does not reach: a CI job, a script, or a project that sets up the lint after an edit by hand. It is not published to the npm registry; both ways start from a checkout of this repository.
 
-- **Run the bundle directly** — `node <path-to-rdd-kit>/packages/cli/bundle/roadmap-lint.cjs [path]`. Nothing is installed; the bundle has no dependencies and needs only Node.js >= 24. A hook set up by hand finds it through `ROADMAP_LINT_BIN` pointed at that file
+- **Run the bundle directly** — `node <path-to-rdd-kit>/packages/cli/bundle/roadmap-lint.cjs [path]`. Nothing is installed; the bundle has no dependencies and needs only Node.js >= 24. The command hook beside it finds it on its own; a copy of the hook placed elsewhere finds it through `ROADMAP_LINT_BIN` pointed at that file
 - **Install it as a command** — build a tarball and install it. Packing needs the checkout's dependencies installed (`pnpm install`, which fetches from the network once); the tarball itself is the same bundle with no dependencies, so the install in the target project works offline:
 
 ```
