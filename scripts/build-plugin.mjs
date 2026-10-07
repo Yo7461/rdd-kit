@@ -30,15 +30,19 @@
 // (tsconfig.plugin.json). A type-only import of a types package (`import type … from 'mdast'`) stays as
 // it is: it is erased before the module runs.
 //
-// A dependency is copied as installed, apart from two mechanical changes made in the open (PATCHES and
-// escapeInvisible below). Anthropic's directory reads a plugin's hooks module and every file it imports
-// as text, and refuses code built from a string — an `eval`, even in a branch that never runs — and
-// holds a file with an invisible character in a string or comment, where a reader cannot see it. Two
-// dependencies trip these as installed: the patch applies to the source before anything else reads it
-// (the CLI bundle included), and every invisible character of a copied file is written as its escape.
-// A patch whose text is not found exactly once stops the build, so a dependency upgrade that changes
-// the text is noticed. Each change is said in a line at the head of the copy, and in the package's
-// entry of THIRD-PARTY-LICENSES.txt.
+// A dependency is copied as installed — its line endings made LF — apart from two mechanical changes
+// made in the open (PATCHES and escapeInvisible below). Anthropic's directory reads a plugin's hooks
+// module and every file it imports as text, and refuses code built from a string — an `eval`, even in
+// a branch that never runs — and holds a file with an invisible character in a string or comment, where
+// a reader cannot see it. Two dependencies trip these as installed: a patch replaces text of the source
+// wherever esbuild reads it (the conversion of the copy, the bundle, and the walk that finds the files),
+// and every invisible character of a copied file is written as its escape — which means the same
+// inside an ordinary string literal, the one place these characters sit in the dependencies copied
+// today; a character right after a backslash, or beyond the BMP, stops the build for a person to look,
+// and the test suite compares the copy of the character table with the installed package's. A patch
+// whose text is not found exactly once, or that applies to no file at all, stops the build, so a
+// dependency upgrade that changes the text is noticed. Each change is said in a line at the head of
+// the copy, and in the package's entry of THIRD-PARTY-LICENSES.txt.
 //
 // The third-party list is derived from the same reach: every copied file under node_modules belongs to the
 // nearest package.json above it, and the list carries that package's name, version, declared license, and
@@ -220,7 +224,7 @@ function renderThirdParty(packages, modifications) {
   ];
   for (const { name, version: pkgVersion, dir, pkg } of packages) {
     parts.push(rule, `${name} ${pkgVersion} — ${declaredLicense(pkg)}`, rule, '');
-    for (const note of modifications.get(name) ?? []) parts.push(`Modified in rdd-kit's copy (lib/vendor/${name}/${note})`, '');
+    for (const note of modifications.get(name) ?? []) parts.push(`Modified by rdd-kit's build — lib/vendor/${name}/${note}`, '');
     const files = licenseFilesOf(dir);
     if (files.length === 0) {
       parts.push(fallbackBlock(name, dir, pkg), '');
@@ -270,9 +274,10 @@ function destinationOf(inputPath) {
 // The two mechanical changes to the dependencies (see the header)
 
 /**
- * A change to a dependency's source, applied before esbuild reads it — for the copy and for the bundle alike.
- * `file` matches the installed file's path, `find` is text that has to occur exactly once, and `note` is the
- * sentence the copy and the third-party list carry.
+ * A change to a dependency's source, applied wherever esbuild reads it — for the copy and for the bundle alike.
+ * `file` matches the installed file's path, `find` is text that has to occur exactly once, `note` is the
+ * sentence the copy and the third-party list carry, and `applied` counts the files it was applied to (zero at
+ * the end stops the build: the dependency moved, or was dropped).
  */
 const PATCHES = [
   {
@@ -280,6 +285,7 @@ const PATCHES = [
     // ever loaded as a module (the conversion wraps it as one), so the branch cannot run — but the directory
     // reads the text, not the run, and refuses an eval wherever it stands
     file: /[\\/]node_modules[\\/]format[\\/]format\.js$/,
+    applied: 0,
     find: [
       '  // CommonJS / Node module',
       "  if (typeof module !== 'undefined') {",
@@ -293,7 +299,7 @@ const PATCHES = [
       '  }',
     ].join('\n'),
     replace: ['  // CommonJS / Node module (the only way this copy is loaded)', '  namespace = module.exports = format;'].join('\n'),
-    note: 'the fallback of its prologue that found the global object through eval, for an environment without `module`, is removed — this copy is only ever loaded as a module',
+    note: 'the fallback of its prologue that found the global object by evaluating a string, for an environment without `module`, is removed — this copy is only ever loaded as a module',
   },
 ];
 
@@ -308,6 +314,7 @@ function patchedSource(file) {
       throw new Error(`${toPosix(path.relative(repoRoot, file))}: the text a patch expects is not found exactly once — the dependency changed; revisit PATCHES`);
     }
     text = text.slice(0, at) + patch.replace + text.slice(at + patch.find.length);
+    patch.applied++;
     notes.push(patch.note);
   }
   return { text, notes };
@@ -321,32 +328,35 @@ const patchPlugin = {
   },
 };
 
-// The characters a reader cannot see: the format characters (soft hyphen, zero-width and directional marks,
-// word joiner, the invisible operators, the byte-order mark, variation selectors, tags), the spaces beyond
-// ASCII, the line and paragraph separators, and the Hangul fillers — as code points, so that this file holds none itself
-const INVISIBLE_RANGES = [
-  [0xa0, 0xa0], [0xad, 0xad], [0x34f, 0x34f], [0x61c, 0x61c], [0x115f, 0x1160], [0x1680, 0x1680], [0x17b4, 0x17b5],
-  [0x180b, 0x180e], [0x2000, 0x200f], [0x2028, 0x202f], [0x205f, 0x2064], [0x2066, 0x206f], [0x3000, 0x3000],
-  [0x3164, 0x3164], [0xfe00, 0xfe0f], [0xfeff, 0xfeff], [0xffa0, 0xffa0], [0xfff9, 0xfffb], [0xe0000, 0xe007f], [0xe0100, 0xe01ef],
-];
-const invisiblePattern = new RegExp(
-  `[${INVISIBLE_RANGES.map(([from, to]) => (from === to ? `\\u{${from.toString(16)}}` : `\\u{${from.toString(16)}}-\\u{${to.toString(16)}}`)).join('')}]`,
-  'gu',
-);
+// What a reader cannot see: the format characters (the soft hyphen, the zero-width and directional marks, the
+// word joiner, the invisible operators, the byte-order mark), the default-ignorable code points (variation
+// selectors, tags, the Hangul fillers), the spaces beyond the ASCII space, and the line and paragraph
+// separators — as Unicode properties, so that nothing is listed by hand and this file holds none itself. The
+// test suite looks for the same set, with the control characters added, and holds every file of the plugin to it
+const INVISIBLE = String.raw`[\p{Cf}\p{Default_Ignorable_Code_Point}\p{Zl}\p{Zp}]|(?! )\p{Zs}`;
+const invisiblePattern = new RegExp(INVISIBLE, 'gu');
 
-/** The text with every invisible character written as its escape (`\uXXXX`, or `\u{XXXXX}` beyond the BMP), and how many there were. */
-function escapeInvisible(text) {
+/**
+ * The text with every invisible character written as its `\uXXXX` escape, and how many there were. The escape
+ * means the same only inside an ordinary string literal: a character right after a backslash (the escape would
+ * become a different one) or beyond the BMP (the `\u{…}` form does not mean the same in every place) stops the
+ * build, for a person to look at the file.
+ */
+function escapeInvisible(text, where) {
   let count = 0;
-  const escaped = text.replace(invisiblePattern, (character) => {
-    count++;
+  const escaped = text.replace(invisiblePattern, (character, offset) => {
     const codePoint = character.codePointAt(0);
-    return codePoint > 0xffff ? `\\u{${codePoint.toString(16)}}` : `\\u${codePoint.toString(16).padStart(4, '0')}`;
+    const shown = `U+${codePoint.toString(16).toUpperCase().padStart(4, '0')}`;
+    if (offset > 0 && text[offset - 1] === '\\') throw new Error(`${where}: ${shown} right after a backslash — an escape there would change the meaning; look at the file`);
+    if (codePoint > 0xffff) throw new Error(`${where}: ${shown} is beyond the BMP — its escape does not mean the same in every place; look at the file`);
+    count++;
+    return `\\u${codePoint.toString(16).padStart(4, '0')}`;
   });
   return { text: escaped, count };
 }
 
 /** The lines that say, at the head of a copy, how it differs from the installed file. */
-const modifiedLines = (notes) => notes.map((note) => `// Modified in this copy by rdd-kit's build (scripts/build-plugin.mjs): ${note}`).join('\n');
+const modifiedLines = (notes) => notes.map((note) => `// Modified in this copy by rdd-kit's build (scripts/build-plugin.mjs in the repository): ${note}`).join('\n');
 
 /**
  * One CommonJS file as an ES module (esbuild, that file alone — anything it required would be inlined with
@@ -400,6 +410,7 @@ async function readableCopy() {
     absWorkingDir: repoRoot,
     logLevel: 'silent',
     logOverride: { 'empty-import-meta': 'silent' },
+    plugins: [patchPlugin],
   });
   // A warning here (an import of a name a module does not export, say) is what the engine, which links the
   // copy as written, would refuse at load — so it stops the build
@@ -444,18 +455,21 @@ async function readableCopy() {
       // and its invisible characters written as escapes — each said in a line at the head of the copy
       const patched = patchedSource(path.join(repoRoot, inputPath));
       text = input?.format === 'cjs' ? await cjsToEsm(inputPath, patched.text) : patched.text;
-      const notes = [...patched.notes];
-      const escaped = escapeInvisible(text);
+      // A patch reaches the bundle as well (the plugin applies it wherever esbuild reads the file); the escapes
+      // are written into the copy alone — the list says which is which
+      const notes = patched.notes.map((note) => ({ note, where: 'in the plugin, and the copy inlined in the CLI bundle' }));
+      const escaped = escapeInvisible(text, destination.rel);
       if (escaped.count > 0) {
-        // Still JavaScript after the rewrite (a character inside an identifier would not be — none is expected there)
+        // Still parses after the rewrite — a syntax check only; that the meaning is kept is what the guards in
+        // escapeInvisible and the comparison in the test suite are for
         await transform(escaped.text, { loader: destination.rel.endsWith('.ts') ? 'ts' : 'js' });
         text = escaped.text;
-        notes.push(`${escaped.count} invisible ${escaped.count === 1 ? 'character is' : 'characters are'} written as escapes (\\uXXXX), so that a reader sees them`);
+        notes.push({ note: `${escaped.count} invisible ${escaped.count === 1 ? 'character is' : 'characters are'} written as escapes (\\uXXXX), so that a reader sees them`, where: 'in the plugin' });
       }
       if (notes.length > 0) {
-        text = `${modifiedLines(notes)}\n${text}`;
+        text = `${modifiedLines(notes.map(({ note }) => note))}\n${text}`;
         const file = path.posix.basename(destination.rel);
-        modifications.set(destination.pkg, [...(modifications.get(destination.pkg) ?? []), ...notes.map((note) => `${file}: ${note}`)]);
+        modifications.set(destination.pkg, [...(modifications.get(destination.pkg) ?? []), ...notes.map(({ note, where }) => `${file} ${where}: ${note}`)]);
       }
     }
     const fromDir = path.posix.dirname(destination.rel);
@@ -540,6 +554,9 @@ async function cliBundle() {
 
 const copy = await readableCopy();
 const bundle = await cliBundle();
+for (const patch of PATCHES) {
+  if (patch.applied === 0) throw new Error(`A patch applied to no file (${patch.file}): the dependency moved, or was dropped — revisit PATCHES`);
+}
 
 const copied = new Set(copy.packages.map((p) => `${p.name}@${p.version}`));
 const outside = bundle.packages.filter((p) => !copied.has(`${p.name}@${p.version}`));

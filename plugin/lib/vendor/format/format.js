@@ -1,4 +1,4 @@
-// Modified in this copy by rdd-kit's build (scripts/build-plugin.mjs): the fallback of its prologue that found the global object through eval, for an environment without `module`, is removed — this copy is only ever loaded as a module
+// Modified in this copy by rdd-kit's build (scripts/build-plugin.mjs in the repository): the fallback of its prologue that found the global object by evaluating a string, for an environment without `module`, is removed — this copy is only ever loaded as a module
 //
 // format - printf-like string formatting for JavaScript
 // github.com/samsonjs/format

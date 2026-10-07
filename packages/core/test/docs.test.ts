@@ -328,6 +328,7 @@ describe('the links in the documentation', () => {
         const [target = '', anchor] = decoded(link.slice(prefix.length)).split('#');
         const rel = path.posix.normalize(target);
         expect(existsExactly(rel), hint).toBe(true);
+        expect(isIgnored(rel), `${hint}, which git ignores`).toBe(false);
         expect(isDevelopmentOnly(rel), `${hint}, which the repository does not publish`).toBe(false);
         if (anchor !== undefined && rel.endsWith('.md')) expect(indexOf(rel).anchors.has(anchor), hint).toBe(true);
       }

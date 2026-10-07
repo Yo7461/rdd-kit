@@ -1,4 +1,4 @@
-// Modified in this copy by rdd-kit's build (scripts/build-plugin.mjs): 52 invisible characters are written as escapes (\uXXXX), so that a reader sees them
+// Modified in this copy by rdd-kit's build (scripts/build-plugin.mjs in the repository): 52 invisible characters are written as escapes (\uXXXX), so that a reader sees them
 /**
  * Map of named character references.
  *

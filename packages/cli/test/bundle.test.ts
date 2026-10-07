@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 
 // Checks on the committed distribution artifacts that scripts/build-plugin.mjs generates: the readable
@@ -158,22 +158,38 @@ describe('the dependencies under plugin/lib/vendor', () => {
     // constructor anywhere is refused, even in a branch that never runs, and an invisible character in a string
     // or a comment is held for a reviewer. The build patches the one and escapes the other, and marks each
     // changed copy at its head and in the third-party list — the two have to agree
-    const ranges: [number, number][] = [
-      [0xa0, 0xa0], [0xad, 0xad], [0x34f, 0x34f], [0x61c, 0x61c], [0x115f, 0x1160], [0x1680, 0x1680], [0x17b4, 0x17b5],
-      [0x180b, 0x180e], [0x2000, 0x200f], [0x2028, 0x202f], [0x205f, 0x2064], [0x2066, 0x206f], [0x3000, 0x3000],
-      [0x3164, 0x3164], [0xfe00, 0xfe0f], [0xfeff, 0xfeff], [0xffa0, 0xffa0], [0xfff9, 0xfffb], [0xe0000, 0xe007f], [0xe0100, 0xe01ef],
-    ];
-    const invisible = new RegExp(`[${ranges.map(([from, to]) => `\\u{${from.toString(16)}}-\\u{${to.toString(16)}}`).join('')}]`, 'u');
+    // The set the build escapes (the same text — the build is held to it), with the control characters added
+    const INVISIBLE = String.raw`[\p{Cf}\p{Default_Ignorable_Code_Point}\p{Zl}\p{Zp}]|(?! )\p{Zs}`;
+    expect(read(path.join(repoRoot, 'scripts', 'build-plugin.mjs')), 'the build escapes the same set of characters').toContain(INVISIBLE);
+    const invisible = new RegExp(`${INVISIBLE}|(?![\\t\\n\\r])\\p{Cc}`, 'u');
     const marked: string[] = [];
     for (const rel of filesUnder(pluginDir)) {
       const text = read(path.join(pluginDir, rel));
       expect(text, `${rel} holds an invisible character`).not.toMatch(invisible);
-      if (/\.(m?js|cjs|ts)$/u.test(rel)) expect(text, `${rel} builds code from a string`).not.toMatch(/\beval\s*\(|,\s*eval\s*\)|\bFunction\s*\(/u);
-      if (text.startsWith("// Modified in this copy by rdd-kit's build (scripts/build-plugin.mjs): ")) marked.push(rel);
+      if (/\.(m?js|cjs|ts)$/u.test(rel)) {
+        // Outside the comments: the identifier eval anywhere but as a property name (fault keys its maker of an
+        // EvalError `eval:`), the identifier Function, and a call of something's constructor
+        const code = text.replace(/\/\*[\s\S]*?\*\//gu, '').replace(/^\s*\/\/.*$/gmu, '');
+        expect(code, `${rel} builds code from a string`).not.toMatch(/\beval\b(?!\s*:)|\bFunction\b|\.constructor\s*\(/u);
+      }
+      if (text.startsWith("// Modified in this copy by rdd-kit's build (scripts/build-plugin.mjs in the repository): ")) marked.push(rel);
     }
     expect(marked).toContain('lib/vendor/format/format.js'); // the eval the directory refused
-    const listed = [...read(path.join(pluginDir, 'THIRD-PARTY-LICENSES.txt')).matchAll(/^Modified in rdd-kit's copy \((lib\/vendor\/[^:]+): /gmu)].map((match) => match[1] as string);
+    const listed = [...read(path.join(pluginDir, 'THIRD-PARTY-LICENSES.txt')).matchAll(/^Modified by rdd-kit's build — (lib\/vendor\/\S+) /gmu)].map((match) => match[1] as string);
     expect([...new Set(listed)].sort()).toEqual(marked.sort());
+  });
+
+  it('keep the meaning of a copy whose invisible characters were escaped: the character-entities table equals the installed one', async () => {
+    const store = path.join(repoRoot, 'node_modules', '.pnpm');
+    const installed = readdirSync(store)
+      .filter((dir) => dir.startsWith('character-entities@'))
+      .map((dir) => path.join(store, dir, 'node_modules', 'character-entities', 'index.js'))
+      .filter((file) => isFile(file));
+    expect(installed.length).toBe(1);
+    const original = (await import(pathToFileURL(installed[0] as string).href)) as { characterEntities: Record<string, string> };
+    const copy = (await import(pathToFileURL(path.join(vendorDir, 'character-entities', 'index.js')).href)) as { characterEntities: Record<string, string> };
+    expect(Object.keys(copy.characterEntities)).toEqual(Object.keys(original.characterEntities));
+    expect(copy.characterEntities).toEqual(original.characterEntities);
   });
 
   // The copy as a module package of its own, outside the repository: what Node itself makes of it, with
