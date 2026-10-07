@@ -458,7 +458,6 @@ describe('the manifests', () => {
       'README.md: id',
       'README.md: marketplace',
       'README.md: plugin',
-      'doc/roadmap-lint.md: cache',
       'plugin/README.md: id',
     ]);
   });

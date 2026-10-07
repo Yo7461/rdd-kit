@@ -16,13 +16,13 @@ roadmap-lint checks the structure of the records under `roadmap/`: front matter,
 
 ## Running it
 
-With the plugin installed, the linter runs without any setup:
+With the plugin installed, the linter runs without any setup and without Node.js — the plugin's hooks module runs it inside Claude Code:
 
-- **From the hook** — after every `Edit` or `Write` tool call on a file under `roadmap/` in a Claude Code session. It reports only when there are diagnostics (see [plugin/README.md](../plugin/README.md)). A change made through the shell does not start the hook; it is caught at the next such edit, or by the lint before the close commit
-- **From the skill** — before every close commit, and as the first step of `/roadmap doctor`
-- **By hand** — `node <plugin root>/bin/roadmap-lint.js [path]`, where the plugin root is the installed copy under `~/.claude/plugins/cache/rdd-kit/rdd-kit/<version>/`. From a checkout of this repository it is `node plugin/bin/roadmap-lint.js [path]`
+- **After an edit** — after every `Edit` or `Write` tool call on a file under `roadmap/` in a Claude Code session. The report joins the result of that edit, only when there are diagnostics (see [plugin/README.md](../plugin/README.md)). A change made through the shell does not start the check; it is caught at the next such edit, or by the lint before the close commit
+- **From the skill** — before every close commit, and as the first step of `/roadmap doctor`: the skill calls the tool `mcp__rdd-kit__roadmap_lint` that the plugin registers (the same report, as text or as JSON), and falls back to the CLI where the plugin is not installed
+- **By hand** — the CLI: `node <checkout>/packages/cli/bundle/roadmap-lint.cjs [path]` from a checkout of this repository, or `roadmap-lint [path]` once the npm package is installed. The plugin carries no CLI
 
-The bundle has no dependencies and needs only Node.js >= 24. For the places the plugin does not reach — a CI job, a hook set up by hand — see [Using the linter without the plugin](#using-the-linter-without-the-plugin).
+The CLI bundle has no dependencies and needs only Node.js >= 24. For the places the plugin does not reach — a CI job, a hook set up by hand — see [Using the linter without the plugin](#using-the-linter-without-the-plugin).
 
 ## Invocation
 
@@ -201,9 +201,9 @@ These need no reaction. The sequence of edits is finished first, and the check t
 
 ## Using the linter without the plugin
 
-rdd-kit is distributed as a Claude Code plugin, and the plugin already carries the linter. It is not published to the npm registry. This section is for the places the plugin does not reach: a CI job, or a project that sets up the hook by hand. Both ways start from a checkout of this repository.
+rdd-kit is distributed as a Claude Code plugin, and the plugin runs the linter inside Claude Code. The CLI is for the places the plugin does not reach: a CI job, a script, or a project that sets up the lint after an edit by hand. It is not published to the npm registry; both ways start from a checkout of this repository.
 
-- **Run the bundle directly** — `node <path-to-rdd-kit>/plugin/bin/roadmap-lint.js [path]`. Nothing is installed; the bundle has no dependencies and needs only Node.js >= 24. A hook set up by hand finds it through `ROADMAP_LINT_BIN` pointed at that file
+- **Run the bundle directly** — `node <path-to-rdd-kit>/packages/cli/bundle/roadmap-lint.cjs [path]`. Nothing is installed; the bundle has no dependencies and needs only Node.js >= 24. A hook set up by hand finds it through `ROADMAP_LINT_BIN` pointed at that file
 - **Install it as a command** — build a tarball and install it. Packing needs the checkout's dependencies installed (`pnpm install`, which fetches from the network once); the tarball itself is the same bundle with no dependencies, so the install in the target project works offline:
 
 ```
@@ -212,7 +212,7 @@ cd packages/cli && pnpm pack --pack-destination <dir>
 npm install --offline --no-audit --no-fund <dir>/roadmap-lint-<version>.tgz
 ```
 
-The last command runs in the target project and installs the CLI there, where `npx roadmap-lint` and the npm scripts of that project find it. With `-g` it installs for every project and puts `roadmap-lint` on the PATH. The tarball carries the license files and the copyright notice as well: `LICENSE`, `THIRD-PARTY-LICENSES.txt`, and `NOTICE`.
+The last command runs in the target project and installs the CLI there, where `npx roadmap-lint` and the npm scripts of that project find it. With `-g` it installs for every project and puts `roadmap-lint` on the PATH. The package also carries the command hook for the lint after an edit, `hooks/roadmap-lint-hook.mjs`, which finds the bundle beside it (how to wire it into `.claude/settings.json`: [plugin/README.md](../plugin/README.md#without-the-plugin--the-command-hook)), and the license files and the copyright notice: `LICENSE`, `THIRD-PARTY-LICENSES.txt`, and `NOTICE`.
 
 ## Upgrade notes
 

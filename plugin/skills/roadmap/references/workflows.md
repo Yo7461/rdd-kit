@@ -443,7 +443,7 @@ When `close` is called on its own after an interruption (a new conversation, the
 Notes:
 
 - **An invariant holds when the records are at rest.** Updating the records always spans several files, so this procedure necessarily passes through a window where a diagnostic is true and unavoidable — FM-3 between steps 1 and 4, GIT-1 from step 4 until the commit in step 5, BID-1 / BID-2 whenever an R/E and a session file move together. Don't react to a diagnostic inside the window; finish the procedure and confirm at the checkpoint that nothing is left (a GIT-7 warning is the one that may remain — it belongs to the review step of `replan` / `phase close`, not to the close). The records are at rest on a clean working tree and while a session is open, and those are the two states the invariant is about
-- **Run roadmap-lint (step 1 of § doctor) and the full test suite between step 4 and step 5 — the lint run is required, not optional** — after the root `status.md` is rewritten and before the close commit. That is the one point where the records are complete and the tree is not yet committed: the only diagnostics that may remain are the GIT-1 window and a GIT-7 warning waiting for its keep / promote / drop, anything else is real and is fixed before the commit, and a green run means the close is safe to land. When the CLI cannot run (not installed, not built), don't substitute reading by eye (§ doctor step 1) — say so in `Result` (the session file is still uncommitted) and put installing it first in `Next`
+- **Run roadmap-lint (step 1 of § doctor) and the full test suite between step 4 and step 5 — the lint run is required, not optional** — after the root `status.md` is rewritten and before the close commit. That is the one point where the records are complete and the tree is not yet committed: the only diagnostics that may remain are the GIT-1 window and a GIT-7 warning waiting for its keep / promote / drop, anything else is real and is fixed before the commit, and a green run means the close is safe to land. When neither route of § doctor step 1 can run it (the plugin not enabled, the CLI not installed or not built), don't substitute reading by eye — say so in `Result` (the session file is still uncommitted) and put installing it first in `Next`
 - Propose splitting the phase (`replan`) separately from the Next when the phase status has passed 300 lines
 - Run `close` even when the session produced nothing (one line in the summary saying so, with the reason)
 
@@ -585,16 +585,20 @@ Check the whole of `roadmap/` and report what turns up under the title `Records 
 
 ### Step 1: run roadmap-lint (checks 1–7, delegated)
 
-Run it in a directory that contains `roadmap/` (normally the project root):
+Run it over the directory that contains `roadmap/` (normally the project root), by the first of these two routes that is there:
 
-```
-roadmap-lint [path] [--config <path>] [--format text|json] [--fail-severity error|warning]
-```
+1. **The plugin's tool** — `mcp__rdd-kit__roadmap_lint`, which the rdd-kit plugin registers (it is in the tool list while the plugin is enabled). Both of its inputs are optional: `path` (the directory that holds `roadmap/`, or `roadmap/` itself — relative to the project root, or absolute; the default is the project root) and `format` (`text` or `json`; the default is `text`). It returns the same report the CLI prints, and an error result when it cannot find `roadmap/`, the format is wrong, or the lint itself fails — read the error, fix the path, and call it again
+2. **The CLI** — where the plugin is not installed:
 
-- `path` defaults to the current directory. The config is found automatically as `.roadmap-lint.json` next to `roadmap/` (override it explicitly with `--config`). Use `--format json` for machine processing
-- **How to read the exit code:** 0 = no diagnostics at or above `--fail-severity` (`error` by default). **Warnings can still be there — always read the output itself.** 1 = there are some. 2 = an execution error (invalid arguments, invalid config, a missing target — not a lint result; fix the command, the path, or the config and run it again)
-- **How the CLI is resolved** — the same order the hook uses: 1. the `ROADMAP_LINT_BIN` environment variable when it is set, 2. the bundle shipped with the plugin, `node <plugin root>/bin/roadmap-lint.js` (the plugin root is two levels above this skill's own directory; in a plugin install this works without an npm install), 3. `roadmap-lint` on the PATH (an npm install) — the hook's own order, minus the development-checkout path that only the linter's repository has. Don't conclude "not installed" from the absence of one of them alone
-- Report the situation and the installation steps when none of them can run it (not installed, not built). Don't substitute reading checks 1–7 by eye
+   ```
+   roadmap-lint [path] [--config <path>] [--format text|json] [--fail-severity error|warning]
+   ```
+
+   - `path` defaults to the current directory. The config is found automatically as `.roadmap-lint.json` next to `roadmap/` (override it explicitly with `--config`). Use `--format json` for machine processing
+   - **How to read the exit code:** 0 = no diagnostics at or above `--fail-severity` (`error` by default). **Warnings can still be there — always read the output itself.** 1 = there are some. 2 = an execution error (invalid arguments, invalid config, a missing target — not a lint result; fix the command, the path, or the config and run it again)
+   - **How the CLI is resolved:** 1. the `ROADMAP_LINT_BIN` environment variable when it is set (the program to run — a `.js` / `.cjs` / `.mjs` file runs under `node`), 2. `roadmap-lint` on the PATH (an npm install), 3. in a checkout of the linter's own repository, `node <checkout>/packages/cli/bundle/roadmap-lint.cjs`. The plugin carries no CLI, so there is nothing to look for in a plugin folder. Don't conclude "not installed" from the absence of one of them alone
+
+The tool and the CLI run the same rules with the same config and print the same report. Report the situation and the installation steps when neither route can run it (the plugin not enabled, the CLI not installed or not built). Don't substitute reading checks 1–7 by eye
 
 How the checks map to the rules (roadmap-lint runs all 35 rules — the ones under checks 1–7 and, on top of them, the structural ones in the last row):
 
