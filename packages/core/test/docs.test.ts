@@ -395,6 +395,21 @@ describe('the manifests', () => {
     expect(entry['name']).toBe(pluginName);
   });
 
+  // The directory reads these three from plugin.json; `claude plugin validate` accepts any value in them
+  it('point the listing fields at the repository, and the privacy policy at a heading of the plugin README', () => {
+    const homepage = plugin['homepage'] as string;
+    expect(plugin['documentationUrl']).toBe(`${homepage}#readme`);
+    expect(plugin['supportUrl']).toBe(`${homepage}/issues`);
+    const privacy = plugin['privacyPolicyUrl'] as string;
+    const prefix = `${homepage}/blob/main/plugin/README.md#`;
+    expect(privacy.startsWith(prefix), privacy).toBe(true);
+    expect(indexOf('plugin/README.md').anchors.has(privacy.slice(prefix.length)), privacy).toBe(true);
+    // The marketplace entry carries none of them — validate reports them there as unknown fields
+    for (const key of ['documentationUrl', 'supportUrl', 'privacyPolicyUrl']) {
+      expect(entry).not.toHaveProperty(key);
+    }
+  });
+
   it('name one owner, and the documentation names the same one wherever a repository is named', () => {
     const repository = `${owner}/${pluginName}`;
     expect((marketplace['owner'] as Record<string, unknown>)['name']).toBe(owner);

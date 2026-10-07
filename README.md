@@ -99,7 +99,7 @@ Pass `uninstall` the same `--scope` the install used. Removing the marketplace a
 | [doc/concepts.md](doc/concepts.md) | Roadmap-driven development in full — the layers, phases, sessions, IDs, the spec, when the person is asked, and the language the records are written in |
 | [doc/roadmap-lint.md](doc/roadmap-lint.md) | The linter — invocation, output, configuration, the rules, and how to respond to diagnostics. Also the upgrade notes: what changed in each version |
 | [doc/development.md](doc/development.md) | Working on rdd-kit itself — repository layout, tests, fixtures, and releases |
-| [plugin/README.md](plugin/README.md) | What is distributed, what the plugin runs and reads, three things to try, troubleshooting, support, the privacy policy, and the lint without the plugin |
+| [plugin/README.md](plugin/README.md) | What is distributed, three things to try, what the plugin runs and reads, the lint without the plugin, troubleshooting, support, and the privacy policy |
 
 ## License
 
