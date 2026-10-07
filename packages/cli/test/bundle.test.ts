@@ -153,6 +153,29 @@ describe('the dependencies under plugin/lib/vendor', () => {
     }
   });
 
+  it('hold no code built from a string and no invisible character, and say at the head of a copy and in the list where a copy differs from the installed file', () => {
+    // Anthropic's directory reads the hooks module and every file it imports as text: an eval or a Function
+    // constructor anywhere is refused, even in a branch that never runs, and an invisible character in a string
+    // or a comment is held for a reviewer. The build patches the one and escapes the other, and marks each
+    // changed copy at its head and in the third-party list — the two have to agree
+    const ranges: [number, number][] = [
+      [0xa0, 0xa0], [0xad, 0xad], [0x34f, 0x34f], [0x61c, 0x61c], [0x115f, 0x1160], [0x1680, 0x1680], [0x17b4, 0x17b5],
+      [0x180b, 0x180e], [0x2000, 0x200f], [0x2028, 0x202f], [0x205f, 0x2064], [0x2066, 0x206f], [0x3000, 0x3000],
+      [0x3164, 0x3164], [0xfe00, 0xfe0f], [0xfeff, 0xfeff], [0xffa0, 0xffa0], [0xfff9, 0xfffb], [0xe0000, 0xe007f], [0xe0100, 0xe01ef],
+    ];
+    const invisible = new RegExp(`[${ranges.map(([from, to]) => `\\u{${from.toString(16)}}-\\u{${to.toString(16)}}`).join('')}]`, 'u');
+    const marked: string[] = [];
+    for (const rel of filesUnder(pluginDir)) {
+      const text = read(path.join(pluginDir, rel));
+      expect(text, `${rel} holds an invisible character`).not.toMatch(invisible);
+      if (/\.(m?js|cjs|ts)$/u.test(rel)) expect(text, `${rel} builds code from a string`).not.toMatch(/\beval\s*\(|,\s*eval\s*\)|\bFunction\s*\(/u);
+      if (text.startsWith("// Modified in this copy by rdd-kit's build (scripts/build-plugin.mjs): ")) marked.push(rel);
+    }
+    expect(marked).toContain('lib/vendor/format/format.js'); // the eval the directory refused
+    const listed = [...read(path.join(pluginDir, 'THIRD-PARTY-LICENSES.txt')).matchAll(/^Modified in rdd-kit's copy \((lib\/vendor\/[^:]+): /gmu)].map((match) => match[1] as string);
+    expect([...new Set(listed)].sort()).toEqual(marked.sort());
+  });
+
   // The copy as a module package of its own, outside the repository: what Node itself makes of it, with
   // no test runner resolving imports on its behalf
   const packageDir = mkdtempSync(path.join(tmpdir(), 'rdd-kit-lib-'));

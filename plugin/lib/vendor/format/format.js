@@ -1,3 +1,4 @@
+// Modified in this copy by rdd-kit's build (scripts/build-plugin.mjs): the fallback of its prologue that found the global object through eval, for an environment without `module`, is removed — this copy is only ever loaded as a module
 //
 // format - printf-like string formatting for JavaScript
 // github.com/samsonjs/format
@@ -23,13 +24,7 @@ var require_format = __commonJS({
   "format.js"(exports, module) {
     (function() {
       var namespace;
-      if (typeof module !== "undefined") {
-        namespace = module.exports = format;
-      } else {
-        namespace = (function() {
-          return this || (1, eval)("this");
-        })();
-      }
+      namespace = module.exports = format;
       namespace.format = format;
       namespace.vsprintf = vsprintf;
       if (typeof console !== "undefined" && typeof console.log === "function") {

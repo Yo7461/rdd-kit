@@ -7366,13 +7366,7 @@ var require_format = __commonJS({
   "node_modules/.pnpm/format@0.2.2/node_modules/format/format.js"(exports2, module2) {
     (function() {
       var namespace;
-      if (typeof module2 !== "undefined") {
-        namespace = module2.exports = format;
-      } else {
-        namespace = (function() {
-          return this || (1, eval)("this");
-        })();
-      }
+      namespace = module2.exports = format;
       namespace.format = format;
       namespace.vsprintf = vsprintf;
       if (typeof console !== "undefined" && typeof console.log === "function") {
