@@ -1,16 +1,1 @@
-{
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/roadmap-lint-hook.mjs\"",
-            "timeout": 30
-          }
-        ]
-      }
-    ]
-  }
-}
+{ "modules": ["./register.ts"] }

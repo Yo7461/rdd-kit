@@ -58,5 +58,6 @@ export { lintPath, runLint } from './engine.js';
 export type { LintOptions, LintResult } from './engine.js';
 export { compareDiagnostics, sortDiagnostics } from './report/sort.js';
 export { formatText } from './report/text.js';
+export { plural } from './plural.js';
 export { formatJson, toJsonReport, JSON_FORMAT_VERSION } from './report/json.js';
 export type { JsonReport } from './report/json.js';

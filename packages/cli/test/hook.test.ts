@@ -6,12 +6,12 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { listViolationCases, materializeCase } from '../../core/src/testing/index.js';
 
-// The spawn check that the hook is non-destructive — starts plugin/hooks/roadmap-lint-hook.mjs as a real
-// process and checks the observable surface directly: stdin (the PostToolUse JSON) against the exit code and stderr.
+// The spawn check that the hook is non-destructive — starts packages/cli/hooks/roadmap-lint-hook.mjs as a
+// real process and checks the observable surface directly: stdin (the PostToolUse JSON) against the exit code and stderr.
 // The T labels are stable identifiers: a case keeps its label when cases are added or reordered, so a
 // reference to a case (in a failure report, say) stays valid.
 const repoRoot = fileURLToPath(new URL('../../..', import.meta.url));
-const hookPath = path.join(repoRoot, 'plugin', 'hooks', 'roadmap-lint-hook.mjs');
+const hookPath = path.join(repoRoot, 'packages', 'cli', 'hooks', 'roadmap-lint-hook.mjs');
 const cliMain = path.join(repoRoot, 'packages', 'cli', 'dist', 'main.js');
 const fixturesRoot = path.join(repoRoot, 'fixtures');
 const validRoot = path.join(fixturesRoot, 'valid');
@@ -36,8 +36,8 @@ const stripPath = (env: NodeJS.ProcessEnv): NodeJS.ProcessEnv => {
   return out;
 };
 
-function runHook(stdin: string, env: NodeJS.ProcessEnv) {
-  const res = spawnSync(process.execPath, [hookPath], {
+function runHook(stdin: string, env: NodeJS.ProcessEnv, hook = hookPath) {
+  const res = spawnSync(process.execPath, [hook], {
     input: stdin,
     encoding: 'utf8',
     env,
@@ -57,6 +57,20 @@ function withSizeViolation<T>(fn: (dir: string) => T): T {
     return fn(dir);
   } finally {
     cleanup();
+  }
+}
+
+// The hook in its own package finds the bundle beside it (step 2 of its resolution order). The cases
+// about the steps after that run a copy of the hook in a directory with no bundle beside it
+function withHookAlone<T>(fn: (hook: string) => T): T {
+  const dir = mkdtempSync(path.join(tmpdir(), 'rdd-kit-hook-alone-'));
+  try {
+    const hook = path.join(dir, 'hooks', 'roadmap-lint-hook.mjs');
+    mkdirSync(path.dirname(hook), { recursive: true });
+    cpSync(hookPath, hook);
+    return fn(hook);
+  } finally {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
   }
 }
 
@@ -108,15 +122,35 @@ describe('the non-destructive contract of the roadmap-lint hook', () => {
     });
   });
 
-  it('T4: no CLI (the env points nowhere, PATH is empty, there is no dist) -> a silent exit 0', () => {
+  it('T4: no CLI (the env points nowhere, no bundle beside the hook, PATH is empty, there is no dist) -> a silent exit 0', () => {
+    withSizeViolation((dir) => {
+      withHookAlone((hook) => {
+        const res = runHook(
+          editJson(dir, path.join('roadmap', 'status.md')),
+          {
+            ...stripPath(baseEnv()),
+            CLAUDE_PROJECT_DIR: dir,
+            ROADMAP_LINT_BIN: path.join(dir, 'no-such-cli.js'),
+          },
+          hook,
+        );
+        expect(res.status).toBe(0);
+        expect(res.stderr).toBe('');
+      });
+    });
+  });
+
+  it('T9: the bundle beside the hook — the package it ships in — is what runs when nothing else is named', () => {
+    // The committed bundle under packages/cli/bundle, found from the hook\'s own location: no env var,
+    // no PATH, and a project that is not the linter\'s checkout
     withSizeViolation((dir) => {
       const res = runHook(editJson(dir, path.join('roadmap', 'status.md')), {
         ...stripPath(baseEnv()),
         CLAUDE_PROJECT_DIR: dir,
-        ROADMAP_LINT_BIN: path.join(dir, 'no-such-cli.js'),
       });
-      expect(res.status).toBe(0);
-      expect(res.stderr).toBe('');
+      expect(res.status).toBe(2);
+      expect(res.stderr).toContain('roadmap-lint: 1 problem (1 error, 0 warnings) after editing roadmap/.');
+      expect(res.stderr).toContain('SIZE-1');
     });
   });
 
@@ -194,20 +228,22 @@ describe('the non-destructive contract of the roadmap-lint hook', () => {
       const env = { ...stripPath(baseEnv()), CLAUDE_PROJECT_DIR: dir, ROADMAP_LINT_BIN: path.join(dir, 'no-such-cli.js') };
       const edit = editJson(dir, path.join('roadmap', 'status.md'));
 
-      const other = runHook(edit, env); // no packages/cli/package.json — not the linter's checkout
-      expect(other.status).toBe(0);
-      expect(other.stderr).toBe('');
-      writeFileSync(path.join(dir, 'packages', 'cli', 'package.json'), JSON.stringify({ name: 'some-other-cli' }));
-      expect(runHook(edit, env).status).toBe(0);
+      withHookAlone((hook) => {
+        const other = runHook(edit, env, hook); // no packages/cli/package.json — not the linter's checkout
+        expect(other.status).toBe(0);
+        expect(other.stderr).toBe('');
+        writeFileSync(path.join(dir, 'packages', 'cli', 'package.json'), JSON.stringify({ name: 'some-other-cli' }));
+        expect(runHook(edit, env, hook).status).toBe(0);
 
-      writeFileSync(path.join(dir, 'packages', 'cli', 'package.json'), JSON.stringify({ name: 'roadmap-lint' }));
-      const own = runHook(edit, env);
-      expect(own.status).toBe(2);
-      expect(own.stderr).toContain('ran the wrong program');
+        writeFileSync(path.join(dir, 'packages', 'cli', 'package.json'), JSON.stringify({ name: 'roadmap-lint' }));
+        const own = runHook(edit, env, hook);
+        expect(own.status).toBe(2);
+        expect(own.stderr).toContain('ran the wrong program');
 
-      // A package.json with a byte order mark is still the linter's own
-      writeFileSync(path.join(dir, 'packages', 'cli', 'package.json'), '﻿' + JSON.stringify({ name: 'roadmap-lint' }));
-      expect(runHook(edit, env).status).toBe(2);
+        // A package.json with a byte order mark is still the linter's own
+        writeFileSync(path.join(dir, 'packages', 'cli', 'package.json'), '﻿' + JSON.stringify({ name: 'roadmap-lint' }));
+        expect(runHook(edit, env, hook).status).toBe(2);
+      });
     });
   });
 

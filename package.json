@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "tsc -b packages/cli",
-    "typecheck": "tsc -b packages/cli && tsc -p tsconfig.tests.json",
+    "typecheck": "tsc -b packages/cli && tsc -p tsconfig.tests.json && tsc -p tsconfig.plugin.json",
     "test": "pnpm run typecheck && vitest run",
     "lint:corpus": "pnpm run build && node packages/cli/dist/main.js fixtures/valid --config lint-corpus.config.json",
     "regen:fixtures": "pnpm run build && node scripts/regen-fixtures.mjs",

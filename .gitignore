@@ -13,3 +13,12 @@ node_modules/
 dist/
 coverage/
 *.tsbuildinfo
+
+# The readable copy under plugin/lib is a committed artifact, whatever its files are called — a
+# dependency ships its browser build under a directory named dist, which the rule above would hide
+!plugin/lib/**/dist/
+
+# What Claude Code writes beside a plugin it loads from this checkout (claude --plugin-dir plugin):
+# its type declarations for the hooks module, and a tsconfig that points at them
+plugin/.claude-plugin/types/
+plugin/tsconfig.json

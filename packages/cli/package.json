@@ -13,6 +13,7 @@
   },
   "files": [
     "bundle",
+    "hooks",
     "LICENSE",
     "NOTICE",
     "THIRD-PARTY-LICENSES.txt"

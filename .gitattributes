@@ -3,9 +3,10 @@
 # fails them
 * text=auto eol=lf
 
-# The distribution bundles are generated files and take no EOL conversion — a CRLF copy made under
-# autocrlf breaks the byte comparison of build-plugin --check and the shebang on Unix
-plugin/bin/** -text
+# The readable copy of the core under plugin/lib and the CLI bundle are generated files and take no EOL
+# conversion — a CRLF copy made under autocrlf breaks the byte comparison of build-plugin --check and
+# the shebang of the bundle on Unix
+plugin/lib/** -text
 packages/cli/bundle/** -text
 # The license files (the root one, its copies, and the generated third-party lists) stay LF for the same
 # reason — the byte comparison of build-plugin --check
