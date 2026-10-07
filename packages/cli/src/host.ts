@@ -32,10 +32,15 @@ export const nodeHost: Host = {
   run: (argv) =>
     new Promise((resolve, reject) => {
       const [command = '', ...args] = argv;
+      // In a partial clone, git would fetch the objects `blame` needs from the remote — over the network,
+      // with the user's credentials. The lint only reads what is there: the lazy fetch is off (git 2.46 and
+      // later read the variable; an older git ignores it, and a blame that lacks its blob fails, which the
+      // core reads as a skip of the rule that dates shelf items)
+      const env = { ...process.env, GIT_NO_LAZY_FETCH: '1' };
       const child = execFile(
         command,
         args,
-        { encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024 },
+        { encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024, env },
         (error, stdout, stderr) => {
           // A process that ran and exited non-zero reports its code as a number; one that could not
           // start (ENOENT) or was killed carries a string code or a signal — those reject

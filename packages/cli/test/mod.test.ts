@@ -4,7 +4,7 @@ import { access, readdir, readFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import type { EngineInterface, FsEntry, FsStat, On, ProcessRunResult, Register, SessionAppendInput, TimerCall, ToolCallResult, ToolSpec } from 'claude-code';
+import type { EngineInterface, FsEntry, FsStat, On, ProcessRunInit, ProcessRunResult, Register, SessionAppendInput, TimerCall, ToolCallResult, ToolSpec } from 'claude-code';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { listViolationCases, materializeCase, withTempGitRepo } from '../../core/src/testing/index.js';
 
@@ -61,6 +61,8 @@ type Overrides = Partial<{
   run: (argv: readonly string[], real: (argv: readonly string[]) => Promise<ProcessRunResult>) => Promise<ProcessRunResult>;
   after: TimerCall;
   register: (t: ToolSpec) => Promise<{ tool: string }>;
+  root: () => Promise<string>;
+  log: (text: string) => void;
 }>;
 
 /** A stand-in for the engine interface over Node: the real file system under `root`, the real git, and recorders for what the module says and registers. */
@@ -68,6 +70,7 @@ function engineAt(root: string, overrides: Overrides = {}) {
   const logged: string[] = [];
   const registered: ToolSpec[] = [];
   const ran: string[][] = [];
+  const inits: (ProcessRunInit | undefined)[] = [];
   let reads = 0;
   const realRun = (argv: readonly string[]): Promise<ProcessRunResult> =>
     new Promise((resolve, reject) => {
@@ -79,7 +82,7 @@ function engineAt(root: string, overrides: Overrides = {}) {
       });
     });
   const $ = {
-    session: { cwd: async () => root, root: async () => root },
+    session: { cwd: async () => root, root: overrides.root ?? (async () => root) },
     fs: {
       read: async (p: string): Promise<string> => {
         reads++;
@@ -103,8 +106,9 @@ function engineAt(root: string, overrides: Overrides = {}) {
       },
     },
     process: {
-      run: (argv: readonly string[]): Promise<ProcessRunResult> => {
+      run: (argv: readonly string[], init?: ProcessRunInit): Promise<ProcessRunResult> => {
         ran.push([...argv]);
+        inits.push(init);
         return overrides.run ? overrides.run(argv, realRun) : realRun(argv);
       },
     },
@@ -117,7 +121,7 @@ function engineAt(root: string, overrides: Overrides = {}) {
           return { cancel: () => clearTimeout(timer) };
         }),
     },
-    ui: { log: (text: string): void => void logged.push(text) },
+    ui: { log: overrides.log ?? ((text: string): void => void logged.push(text)) },
     tool: {
       register: async (t: ToolSpec): Promise<{ tool: string }> => {
         if (overrides.register) return overrides.register(t);
@@ -126,7 +130,7 @@ function engineAt(root: string, overrides: Overrides = {}) {
       },
     },
   } as unknown as EngineInterface;
-  return { $, logged, registered, ran, reads: () => reads };
+  return { $, logged, registered, ran, inits, reads: () => reads };
 }
 
 /** A timer that fires at once: the deadline of a check comes first */
@@ -357,9 +361,12 @@ describe('the check after an Edit or Write under roadmap/', () => {
 
   it('M6: inside a git repository the GIT rules run through $.process.run, and an output the engine cut short is a failure, not a report', () =>
     withTempGitRepo(validTree(), async (repoDir) => {
-      const { $, logged, ran } = engineAt(repoDir);
+      const { $, logged, ran, inits } = engineAt(repoDir);
       await runEdit(repoDir, path.join('roadmap', 'status.md'), $, 'toolu_m6');
       expect(ran.some((argv) => argv[0] === 'git' && argv.includes('--no-optional-locks') && argv.includes('ls-files'))).toBe(true);
+      // Every git runs with the lazy fetch of a partial clone off: the check reads only what the clone holds
+      expect(inits.length).toBe(ran.length);
+      expect(inits.every((init) => init?.env?.['GIT_NO_LAZY_FETCH'] === '1')).toBe(true);
       expect(logged).toHaveLength(1);
       // The fixture's hashes are not in this repository's history (the one commit that first tracked roadmap/ is exempt from the subject rule)
       expect(logged[0]).toContain('error GIT-6');
@@ -374,6 +381,21 @@ describe('the check after an Edit or Write under roadmap/', () => {
       const { answered, expected } = await runEdit(repoDir, path.join('roadmap', 'status.md'), cut.$, 'toolu_m6b');
       expect(answered).toBe(expected);
       expect(cut.logged).toEqual(['roadmap-lint: the check after editing roadmap/ did not run — Error: The output of git exceeds what the engine hands over (4 MiB).']);
+    }));
+
+  it('M8: a project root that cannot be read, and a transcript line that cannot be written, leave the result untouched (fail-open)', () =>
+    withSizeViolation(async (dir) => {
+      const noRoot = engineAt(dir, { root: async () => { throw new Error('no session'); } });
+      const { answered, expected } = await runEdit(dir, path.join('roadmap', 'status.md'), noRoot.$, 'toolu_m8');
+      expect(answered).toBe(expected);
+      expect(noRoot.logged).toEqual(['roadmap-lint: the check after editing roadmap/ did not run — Error: no session']);
+      expect(await runAppend(noRoot.$, [{ type: 'tool_result', tool_use_id: 'toolu_m8', content: 'ok' }])).toBeNull();
+
+      const noLog = engineAt(dir, { log: () => { throw new Error('no transcript'); } });
+      const again = await runEdit(dir, path.join('roadmap', 'status.md'), noLog.$, 'toolu_m8b');
+      expect(again.answered).toBe(again.expected);
+      // The report still reaches the row
+      expect(bodyOf(await runAppend(noLog.$, [{ type: 'tool_result', tool_use_id: 'toolu_m8b', content: 'ok' }]))).toMatch(/^ok\n\nroadmap-lint: 1 problem /u);
     }));
 
   it.runIf(process.platform === 'win32')('M7: on Windows a path that differs in case is still under roadmap/', () =>
@@ -421,5 +443,7 @@ describe('the roadmap_lint tool', () => {
       expect((await call(failing.$, {})).deny).toBe('roadmap-lint could not run: Error: EIO');
       const late = engineAt(dir, { after: atOnce });
       expect((await call(late.$, {})).deny).toBe('roadmap-lint could not run: Error: the check took longer than 60000 ms');
+      const noRoot = engineAt(dir, { root: async () => { throw new Error('no session'); } });
+      expect((await call(noRoot.$, {})).deny).toBe('roadmap-lint could not run: Error: no session');
     }));
 });

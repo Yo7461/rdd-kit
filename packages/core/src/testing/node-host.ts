@@ -32,10 +32,12 @@ export const nodeHost: Host = {
   run: (argv) =>
     new Promise((resolve, reject) => {
       const [command = '', ...args] = argv;
+      // The lazy fetch of a partial clone is off, as in the CLI's host: the lint only reads what is there
+      const env = { ...process.env, GIT_NO_LAZY_FETCH: '1' };
       const child = execFile(
         command,
         args,
-        { encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024 },
+        { encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024, env },
         (error, stdout, stderr) => {
           // A process that ran and exited non-zero reports its code as a number; one that could not
           // start (ENOENT) or was killed carries a string code or a signal — those reject

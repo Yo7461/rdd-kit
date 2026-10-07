@@ -18095,10 +18095,11 @@ var nodeHost = {
   },
   run: (argv) => new Promise((resolve2, reject) => {
     const [command = "", ...args] = argv;
+    const env = { ...process.env, GIT_NO_LAZY_FETCH: "1" };
     const child = (0, import_node_child_process.execFile)(
       command,
       args,
-      { encoding: "utf8", windowsHide: true, maxBuffer: 64 * 1024 * 1024 },
+      { encoding: "utf8", windowsHide: true, maxBuffer: 64 * 1024 * 1024, env },
       (error, stdout, stderr) => {
         if (error === null) resolve2({ exitCode: 0, stdout, stderr });
         else if (typeof error.code === "number") resolve2({ exitCode: error.code, stdout, stderr });

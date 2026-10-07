@@ -77,7 +77,11 @@ function hostOf($: EngineInterface): Host {
       }
     },
     run: async (argv) => {
-      const ran = await $.process.run(argv);
+      // In a partial clone, git would fetch the objects `blame` needs from the remote — over the network,
+      // with the user's credentials. This check only reads what is there: the lazy fetch is off (git 2.46
+      // and later read the variable; an older git ignores it, and a blame that lacks its blob fails, which
+      // the core reads as a skip of the rule that dates shelf items)
+      const ran = await $.process.run(argv, { env: { GIT_NO_LAZY_FETCH: '1' } });
       // The engine hands over the first 4 MiB of each stream and says when it cut: a listing or a log cut
       // short must not be read as complete (the CLI's host rejects at its own limit the same way)
       if (ran.isStdoutTruncated || ran.isStderrTruncated) {
@@ -149,15 +153,25 @@ function describe(error: unknown): string {
   return said.replace(/\s+/g, ' ').trim();
 }
 
+/** One dim line of the transcript. A line that cannot be written must not fail the hook that writes it. */
+function say($: EngineInterface, text: string): void {
+  try {
+    $.ui.log(text);
+  } catch {
+    // nowhere to say it
+  }
+}
+
 export const register: Register = (on) => {
   on('tool.call', { tool: ['Edit', 'Write'] }, async ($, e, next) => {
     const result = await next(e);
     if (result.deny !== undefined || result.isError === true) return result;
-    const root = await $.session.root();
-    if (!isUnderRoadmap(e.file_path, root)) return result;
 
+    // Fail-open from here on: whatever fails, the result goes out as the tool made it
     let text: string | null;
     try {
+      const root = await $.session.root();
+      if (!isUnderRoadmap(e.file_path, root)) return result;
       text = await withDeadline($, EDIT_CHECK_TIMEOUT_MS, async () => {
         const host = hostOf($);
         const target = await resolveTarget(root, host);
@@ -165,13 +179,13 @@ export const register: Register = (on) => {
         return report(await runLint(target, host, await configOf(target.baseDir, host)));
       });
     } catch (error) {
-      // Fail-open: the result stays as the tool made it, and the person sees why the check is missing
-      $.ui.log(`roadmap-lint: the check after editing roadmap/ did not run — ${describe(error)}`);
+      // The person sees why the check is missing
+      say($, `roadmap-lint: the check after editing roadmap/ did not run — ${describe(error)}`);
       return result;
     }
     if (text === null) return result;
 
-    $.ui.log(text);
+    say($, text);
     if (pending.size >= MAX_PENDING) {
       const oldest = pending.keys().next().value;
       if (oldest !== undefined) pending.delete(oldest);
@@ -201,7 +215,7 @@ export const register: Register = (on) => {
     try {
       await $.tool.register({ name: TOOL_NAME, description: TOOL_DESCRIPTION, inputSchema: TOOL_INPUT_SCHEMA });
     } catch (error) {
-      $.ui.log(`roadmap-lint: the ${TOOL_NAME} tool could not be registered — ${describe(error)}`);
+      say($, `roadmap-lint: the ${TOOL_NAME} tool could not be registered — ${describe(error)}`);
     }
     return next(e);
   });
@@ -211,9 +225,9 @@ export const register: Register = (on) => {
     if (format !== 'text' && format !== 'json') return { deny: 'The format must be either text or json.' };
     const asked = e['path'];
     if (asked !== undefined && typeof asked !== 'string') return { deny: 'The path must be a string.' };
-    const root = await $.session.root();
-    const inputPath = asked === undefined || asked === '' ? root : path.resolve(root, asked);
     try {
+      const root = await $.session.root();
+      const inputPath = asked === undefined || asked === '' ? root : path.resolve(root, asked);
       return await withDeadline($, TOOL_TIMEOUT_MS, async (): Promise<ToolCallResult> => {
         const host = hostOf($);
         const target = await resolveTarget(inputPath, host);
